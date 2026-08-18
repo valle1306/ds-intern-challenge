@@ -100,6 +100,18 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
             }
         )
 
+    # Map each team's lowercase spelling to its canonical (majority) spelling
+    # so every issue's `team` field matches clean_df's normalization -- a
+    # raw-sourced issue built from a minority-spelling row (e.g. "product")
+    # would otherwise fail to match its group when weekly_rollup counts
+    # issues per (team, workflow).
+    canonical_by_lower = {}
+    for team in clean_df["team"].unique():
+        canonical_by_lower[team.lower()] = team
+
+    def canonical_team(raw_team):
+        return canonical_by_lower.get(str(raw_team).lower(), raw_team)
+
     # --- duplicate_row -----------------------------------------------
     dedup_cols = [c for c in raw.columns if c != "notes"]
     dup_mask = raw.duplicated(subset=dedup_cols, keep=False)
@@ -111,7 +123,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
             add_issue(
                 "duplicate_row",
                 first["date"],
-                first["team"],
+                canonical_team(first["team"]),
                 first["workflow"],
                 first["source"],
                 (
@@ -135,7 +147,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
             add_issue(
                 "invalid_numeric_literal",
                 r["date"],
-                r["team"],
+                canonical_team(r["team"]),
                 r["workflow"],
                 r["source"],
                 f"Column '{col}' has a non-numeric literal value: {r[col]!r}",
@@ -147,7 +159,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
             add_issue(
                 "missing_value",
                 r["date"],
-                r["team"],
+                canonical_team(r["team"]),
                 r["workflow"],
                 r["source"],
                 f"Column '{col}' is blank (empty string) for this row",
@@ -156,12 +168,9 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
 
     # --- label_inconsistency ------------------------------------------
     # clean_df already carries the canonical (majority) spelling per
-    # team.str.lower() group. Any raw row whose original spelling differs
-    # from that canonical spelling is a minority-spelling row.
-    canonical_by_lower = {}
-    for team in clean_df["team"].unique():
-        canonical_by_lower[team.lower()] = team
-
+    # team.str.lower() group (canonical_by_lower, built above). Any raw row
+    # whose original spelling differs from that canonical spelling is a
+    # minority-spelling row.
     raw_lower_team = raw["team"].str.lower()
     canonical_series = raw_lower_team.map(canonical_by_lower)
     mismatch_mask = canonical_series.notna() & (canonical_series != raw["team"])
@@ -171,7 +180,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
         add_issue(
             "label_inconsistency",
             r["date"],
-            r["team"],
+            canonical,
             r["workflow"],
             r["source"],
             (
