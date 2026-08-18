@@ -22,7 +22,7 @@ Read the domain packet:
 
 Then use the dataset:
 
-- [sample-data/product_usage_events.csv](sample-data/product_usage_events.csv)
+- [sample-data/product_usage_events.csv](../sample-data/product_usage_events.csv)
 
 A teammate on a fictional product team asks:
 

@@ -4,7 +4,7 @@ Pick one track. We evaluate all tracks with the same basic lens: judgment, usefu
 
 ## Track A: Fictional Domain Packet
 
-Read [domain-packet.md](domain-packet.md), then use [sample-data/product_usage_events.csv](sample-data/product_usage_events.csv).
+Read [domain-packet.md](domain-packet.md), then use [sample-data/product_usage_events.csv](../sample-data/product_usage_events.csv).
 
 Choose this if you want the fastest start while still working in a slightly unfamiliar domain. The signal here is how you digest context, handle messy data, notice suspicious records, and turn a vague teammate ask into a useful artifact.
 
