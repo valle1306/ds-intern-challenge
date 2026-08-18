@@ -1,49 +1,37 @@
-# Data Science Intern Build Challenge
+# Submission README
 
-A lightweight build challenge for Data Science Intern candidates to show how they think, build, and work with AI.
+## Track Chosen
 
-This is not a puzzle with one hidden correct answer. It is also not a "don't use AI" exercise. You may use AI as much as you want. The signal is whether you can give it useful context, question its output, and make good decisions in a messy domain.
+Track A — Fictional Domain Packet (SignalDesk).
 
-## Quick Version
+## What I Built
 
-Target time: 90 minutes. Please stop at 2 hours.
+A Streamlit view, "SignalDesk Weekly Health Check": a cleaned/deduped weekly rollup per workflow (completion rate, acceptance rate, flag rate, avg minutes saved, confidence, rating) beside a "Don't trust this blindly" panel listing the raw export's data-quality issues, so a reader can judge whether this week's numbers are safe to quote.
 
-Pick **one** track:
+## Who It Is For
 
-1. **Fictional Domain Packet**: read [domain-packet.md](domain-packet.md) and use the messy dataset in [sample-data/product_usage_events.csv](sample-data/product_usage_events.csv).
-2. **Bring Your Own Domain**: use a small public or synthetic dataset from a domain you care about.
-3. **Tiny Model / Eval**: use a small model, prompt, heuristic, or evaluation workflow to answer a practical question in a domain you choose.
+A SignalDesk product lead deciding whether to trust this week's usage numbers.
 
-Build one small useful artifact for a teammate. Acceptable artifacts include:
+## Data Or Source Used
 
-- a short notebook;
-- a small Streamlit app;
-- a simple script with clear output;
-- a lightweight web page;
-- a tiny internal-tool style interface.
+`sample-data/product_usage_events.csv` — fictional, provided with the challenge; 41 rows, 2026-08-01 to 2026-08-07.
 
-Please also include:
+## Assumptions I Made
 
-- `README.md`: what you built, who it is for, data/source used, assumptions, issues noticed, and what you would do next;
-- `AI_NOTE.md`: whether/how you used AI, what helped, and what you verified or decided yourself.
+- completion_rate = completed/sessions; acceptance_rate = accepted_output/completed; flag_rate = flagged_for_review/completed.
+- Weekly figures are completed-weighted, not a simple mean of daily rows.
+- Exact-duplicate rows collapsed; "product"/"Product" casing merged into one team.
+- Blank cells and literal "n/a" both treated as missing, not zero.
 
-## What We Care About
+## Data Issues Or Caveats I Noticed
 
-- Domain digestion: can you understand unfamiliar context quickly?
-- Scope judgment: did you pick something finishable and useful?
-- Data/source judgment: did you notice weirdness without getting stuck?
-- Product sense: would this help a real teammate?
-- Engineering fundamentals: does it run, and is it understandable?
-- AI collaboration: if you used AI, did you use it thoughtfully?
+- Duplicate row (2026-08-05, Sales/Lead summary/email) with conflicting notes ("traffic spike from demo account" vs "duplicate export row").
+- Literal "n/a" in a numeric confidence column; one blank rating; a team-casing split ("product" vs "Product").
+- ~2.6x session spike on 2026-08-05 for Sales/Lead summary/email tied to a "demo account" note, unexplained after removing the duplicate.
+- 2026-08-07: Support/Reply draft/queue's completion rate, acceptance rate, and rating crashed the day confidence hit its weekly high (0.91) and the review policy changed mid-day — confidence is not quality.
+- Two rows missing on 2026-08-07 (Sales/Lead summary/manual, Support/Reply draft/manual), present other days.
+- Two rows marked "small sample" by the source.
 
-## What We Do Not Care About
+## What I Would Do Next With More Time
 
-- Perfect polish.
-- The most accurate model.
-- A complex app.
-- A long report.
-- Legal-tech knowledge.
-- LeetCode-style cleverness.
-- Spending money on cloud tools.
-
-Read the full prompt in [challenge.md](challenge.md), and choose a track from [tracks.md](tracks.md).
+Confirm the 2026-08-05 spike/duplicate against the real source; ask Support about the 2026-08-07 policy change and missing rows; add a week-over-week trend once more data exists.
