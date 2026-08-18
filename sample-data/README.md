@@ -2,7 +2,7 @@
 
 `product_usage_events.csv` is fictional and intentionally messy. It is provided for Track A of the challenge.
 
-Before using it, read the fictional domain context in [../domain-packet.md](../domain-packet.md).
+Before using it, read the fictional domain context in [../challenge/domain-packet.md](../challenge/domain-packet.md).
 
 Each row is a daily summary for a workflow inside a fictional product.
 

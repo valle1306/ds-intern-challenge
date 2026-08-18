@@ -24,6 +24,7 @@ NUMERIC_COLS = [
 ISSUE_COLUMNS = ["category", "date", "team", "workflow", "source", "description", "severity"]
 
 
+# Read the CSV with no type coercion so raw values like "" and "n/a" stay literal.
 def load_raw(path: str = DATA_PATH) -> pd.DataFrame:
     """Read every cell as its literal source string -- no NA coercion yet.
 
@@ -32,6 +33,7 @@ def load_raw(path: str = DATA_PATH) -> pd.DataFrame:
     return pd.read_csv(path, dtype=str, keep_default_na=False, na_filter=False)
 
 
+# Pick the majority original spelling for a case-insensitive team-name group.
 def _pick_spelling(spellings: pd.Series) -> str:
     """Given the original team spellings within one lower-case group, return
     the most common ORIGINAL spelling. Ties are broken in favor of Title Case.
@@ -47,6 +49,7 @@ def _pick_spelling(spellings: pd.Series) -> str:
     return candidates[0]
 
 
+# Type-coerce, dedupe, normalize team casing, and add the three rate columns.
 def clean(raw: pd.DataFrame) -> pd.DataFrame:
     """Return a typed, deduped, normalized DataFrame. See module docstring /
     the calling contract for the exact transformation steps.
@@ -81,12 +84,14 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+# Diff raw vs. clean to flag every data-quality issue found in the export.
 def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
     """Detect data-quality issues by diffing `raw` against `clean_df`. See
     the calling contract for the exact categories detected.
     """
     issues: list[dict] = []
 
+    # Append one issue row to the running list.
     def add_issue(category, date, team, workflow, source, description, severity):
         issues.append(
             {
@@ -109,6 +114,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
     for team in clean_df["team"].unique():
         canonical_by_lower[team.lower()] = team
 
+    # Map a raw team spelling to clean_df's canonical spelling for that team.
     def canonical_team(raw_team):
         return canonical_by_lower.get(str(raw_team).lower(), raw_team)
 
@@ -218,6 +224,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
             )
 
     # --- suspicious_spike ------------------------------------------------
+    # Flag rows whose sessions exceed 2x their group's median (spike detector).
     def spike_flags(group: pd.DataFrame) -> pd.Series:
         sessions = group["sessions"]
         flags = pd.Series(False, index=group.index)
@@ -252,6 +259,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
         )
 
     # --- confidence_quality_divergence -----------------------------------
+    # Flag the row where confidence peaks but rating bottoms out in its group.
     def divergence_flags(group: pd.DataFrame) -> pd.Series:
         flags = pd.Series(False, index=group.index)
         if len(group) <= 1:
@@ -307,6 +315,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(columns=ISSUE_COLUMNS)
 
 
+# Weighted average of `values` by `weights`, skipping rows where either is NaN.
 def _completed_weighted_mean(values: pd.Series, weights: pd.Series) -> float:
     """Completed-weighted average, skipping NaN rows in both the value and
     the weight sum.
@@ -320,6 +329,7 @@ def _completed_weighted_mean(values: pd.Series, weights: pd.Series) -> float:
     return (values * weights).sum() / total_weight
 
 
+# Roll clean_df up to one completed-weighted summary row per team+workflow.
 def weekly_rollup(clean_df: pd.DataFrame, issues: pd.DataFrame) -> pd.DataFrame:
     """One row per (team, workflow) with completed-weighted rates."""
     rows = []
