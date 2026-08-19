@@ -147,9 +147,10 @@ _CUSTOM_CSS = """
 .sd-hero--compact .sd-hero-subtitle { font-size: 1rem; margin-bottom: var(--sd-space-1); }
 
 .sd-guide-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  display: grid; grid-template-columns: 1fr 2fr;
   gap: var(--sd-space-4); margin-bottom: var(--sd-space-5);
 }
+@media (max-width: 700px) { .sd-guide-grid { grid-template-columns: 1fr; } }
 .sd-guide-card {
   background: #FFFFFF; border: 1px solid var(--sd-slate-200);
   border-radius: var(--sd-radius-md); padding: var(--sd-space-4) var(--sd-space-5);
@@ -173,18 +174,38 @@ _CUSTOM_CSS = """
   color: var(--sd-slate-500); margin-bottom: var(--sd-space-2);
 }
 
-/* Navigation links rendered as cards, so the primary path is on the page and
-   not only in the sidebar. */
-[data-testid="stMain"] [data-testid="stPageLink"] a {
-  display: flex; align-items: center; gap: var(--sd-space-2);
-  background: #FFFFFF; border: 1px solid var(--sd-slate-200);
-  border-radius: var(--sd-radius-md); padding: var(--sd-space-3) var(--sd-space-4);
-  box-shadow: var(--sd-shadow-sm); color: var(--sd-slate-600);
-  font-size: 0.875rem; line-height: 1.4; height: 100%;
+/* Hero stat -- the front page's focal point. Deliberately the only place in
+   the app with type this large, so it reads as the headline and nothing
+   competes with it. */
+.sd-stat-band {
+  display: flex; align-items: center; gap: var(--sd-space-6); flex-wrap: wrap;
+  background: #FFFFFF; border: 1px solid var(--sd-indigo-100);
+  border-left: 4px solid var(--sd-indigo-600); border-radius: var(--sd-radius-lg);
+  padding: var(--sd-space-5) var(--sd-space-6); margin-bottom: var(--sd-space-4);
+  box-shadow: var(--sd-shadow-md);
 }
-[data-testid="stMain"] [data-testid="stPageLink"] a:hover {
-  background: var(--sd-indigo-50); border-color: var(--sd-indigo-200); color: var(--sd-indigo-700);
+.sd-stat-figure {
+  display: flex; align-items: baseline; gap: var(--sd-space-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
 }
+.sd-stat-before {
+  font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em;
+  color: var(--sd-slate-300); text-decoration: line-through;
+}
+.sd-stat-arrow { font-size: 1.5rem; color: var(--sd-slate-300); }
+.sd-stat-after {
+  font-size: 3.25rem; font-weight: 800; letter-spacing: -0.03em;
+  color: var(--sd-indigo-700); line-height: 1;
+}
+.sd-stat-copy { flex: 1; min-width: 320px; }
+.sd-stat-eyebrow {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--sd-indigo-600); margin-bottom: var(--sd-space-1);
+}
+.sd-stat-copy p {
+  font-size: 0.9375rem; color: var(--sd-slate-600); line-height: 1.55; margin: 0; max-width: 78ch;
+}
+.sd-stat-copy strong { color: var(--sd-slate-900); }
 
 /* --- Tab bar ----------------------------------------------------------- */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {

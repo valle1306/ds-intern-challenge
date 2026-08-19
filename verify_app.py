@@ -11,6 +11,8 @@ structure and data, not rendered CSS. That stays a manual check against the
 deployed app.
 """
 
+import re
+
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
@@ -23,6 +25,7 @@ from data_processing import (
     weekly_rollup,
 )
 from ui_helpers import (
+    _CUSTOM_CSS,
     _prompt_change_verdict,
     _rate_comparison_data,
     concern_tag,
@@ -31,6 +34,14 @@ from ui_helpers import (
 )
 
 SAMPLE_CSV = "sample-data/product_usage_events.csv"
+
+PAGES = [
+    "app.py",
+    "pages/1_Weekly_Findings.py",
+    "pages/2_Workflow_Explorer.py",
+    "pages/3_Data_Trust_Center.py",
+    "pages/4_Upload_Your_Own_Week.py",
+]
 
 
 def _non_css_markdown(at):
@@ -101,10 +112,21 @@ assert any("sd-hero--compact" in m.value for m in _md), "compact hero not found"
 assert any("sd-guide-card" in m.value for m in _md), "guidance cards not found"
 # The verdict lines are computed from the pipeline, not written down.
 _verdict = chr(10).join(m.value for m in _md)
-assert "not</strong> a win" in _verdict, "prompt-change verdict line missing"
-assert "Feedback clustering" in _verdict, "worst-workflow verdict line missing"
-assert "Confidence is not quality" in _verdict, "confidence verdict line missing"
-print("OK: app.py (launcher: no tables/charts, computed verdict, nav links)")
+assert "sd-stat-band" in _verdict, "hero stat band missing"
+# Both hero figures are computed: the naive gain and the adjusted one it collapses to.
+assert "+4.4pp" in _verdict and "+0.0pp" in _verdict, "hero stat figures wrong"
+assert "The win was the row, not the" in _verdict, "hero stat conclusion missing"
+assert "Feedback clustering" in _verdict, "worst-workflow finding missing"
+assert "Confidence is not quality" in _verdict, "confidence finding missing"
+# Navigation must actually render. An earlier version styled a testid that does
+# not exist in the Streamlit bundle, so the links shipped bare and unnoticed.
+_nav = at.get("page_link")
+assert len(_nav) == 4, f"expected 4 nav page links, got {len(_nav)}"
+_targets = {pl.page for pl in _nav}
+assert _targets == {
+    "Weekly_Findings", "Workflow_Explorer", "Data_Trust_Center", "Upload_Your_Own_Week"
+}, _targets
+print("OK: app.py (launcher: no tables/charts, computed hero stat, 4 nav links)")
 
 # ---------------------------------------------------------------------------
 # pages/1_Weekly_Findings.py -- the analysis, three tabs
@@ -204,6 +226,32 @@ _rendered = "\n".join(m.value for m in at.markdown)
 assert "&lt;script&gt;" in _rendered, "expected HTML-escaped script tag not found"
 assert "<script>" not in _rendered, "raw unescaped script tag leaked into rendered output"
 print("OK: pages/4_Upload_Your_Own_Week.py (malicious CSV renders HTML-escaped, no injection)")
+
+
+# ---------------------------------------------------------------------------
+# Every CSS class the app emits must exist in the stylesheet.
+#
+# This exists because a real bug shipped: Home styled
+# [data-testid="stPageLink"], a testid Streamlit does not emit, so the nav
+# links rendered bare and nothing failed. Structural tests can't see styling,
+# so the closest cheap guard is proving no element references a class that was
+# never defined. The reverse direction is only reported, not asserted --
+# sd-badge--default and sd-tag--low are legitimate fallbacks the sample week
+# happens not to reach.
+# ---------------------------------------------------------------------------
+_defined = set(re.findall(r"\.(sd-[A-Za-z0-9_-]+)", _CUSTOM_CSS))
+_used = set()
+for _f in PAGES:
+    _at = AppTest.from_file(_f)
+    _at.run(timeout=30)
+    for _m in _non_css_markdown(_at):
+        for _attr in re.findall(r'class="([^"]+)"', _m.value):
+            _used.update(t for t in _attr.split() if t.startswith("sd-"))
+
+_undefined = sorted(_used - _defined)
+assert not _undefined, f"CSS classes used but never defined (render unstyled): {_undefined}"
+print(f"OK: all {len(_used)} emitted sd-* classes are defined "
+      f"(unused fallbacks: {sorted(_defined - _used)})")
 
 print()
 print("ALL CHECKS PASSED")
