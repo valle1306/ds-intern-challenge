@@ -3,8 +3,7 @@
 Presentation only. Every number here comes from data_processing.py via
 ui_helpers.load_sample_pipeline; this file arranges it.
 
-The three tabs are the three questions the teammate in the domain packet
-actually asked. Tabs rather than one long column so each answer is a single
+The three tabs answer the three questions the domain packet's teammate asked. Tabs rather than one long column so each answer is a single
 screen instead of a scroll.
 """
 
@@ -24,11 +23,11 @@ from ui_helpers import (
 st.set_page_config(page_title="SignalDesk · Weekly Findings", layout="wide")
 inject_custom_css()
 st.title("Weekly Findings")
-st.caption("Week of 2026-08-01 to 2026-08-07. One question per tab.")
+st.caption("Sample week 2026-08-01 to 2026-08-07. One question per tab.")
 
 raw, clean_df, issues, rollup = load_sample_pipeline()
 
-# Copy for the "What to do next" tab, kept as data so the render loop stays
+# Copy for the Next steps tab, kept as data so the render loop stays
 # short and the wording is editable in one place. Ordered most to least urgent.
 NEXT_ACTIONS: list[tuple[str, str, str]] = [
     (
@@ -37,21 +36,21 @@ NEXT_ACTIONS: list[tuple[str, str, str]] = [
         "Its entire apparent gain is one duplicated demo-account row. Get the 2026-08-05 "
         "Sales / Lead summary / email spike (140 sessions, more than 2x the surrounding "
         "days' median) confirmed or excluded at the source, then re-run the comparison on "
-        "the **What looks suspicious** tab.",
+        "the **Red flags** tab.",
     ),
     (
         "High",
-        "Find out what the Support review-policy change on 2026-08-07 actually did",
+        "Explain the Support review-policy change on 2026-08-07",
         "Completion fell to ~57% and user rating to 2.1 the same day model confidence hit "
         "its weekly high of 0.91. Confidence went up while everything users actually feel "
-        "went down. One day of post-change data is not a new steady state — but it is "
-        "enough to warrant asking before the policy spreads to other workflows.",
+        "went down. One day of post-change data is not a new steady state, but it is enough "
+        "to justify asking before the policy spreads to other workflows.",
     ),
     (
         "Medium",
         "Chase the two rows missing on 2026-08-07",
         "Sales / Lead summary / manual and Support / Reply draft / manual have no row that "
-        "day — the same day as the policy change. That timing makes an export failure and a "
+        "day, the same day as the policy change. That timing makes an export failure and a "
         "real drop in usage impossible to tell apart from the file alone.",
     ),
     (
@@ -64,19 +63,17 @@ NEXT_ACTIONS: list[tuple[str, str, str]] = [
     (
         "Low",
         "Stop quoting Feedback clustering's minutes-saved figure on its own",
-        "At 13.0 it is the highest of the three workflows, which reads as success until you "
-        "notice it is paired with the worst completion, acceptance and confidence of any "
-        "workflow. Time saved and output quality are pointing in opposite directions there, "
-        "and the packet already warns that minutes saved is directional at best.",
+        "At 13.0 it leads the three workflows, which reads as success until you notice it is "
+        "paired with the worst completion, acceptance and confidence of any workflow. Time "
+        "saved and output quality point in opposite directions here, and the packet already "
+        "warns that minutes saved is directional at best.",
     ),
 ]
 
-tab_working, tab_suspicious, tab_next = st.tabs(
-    ["What's working", "What looks suspicious", "What to do next"]
-)
+tab_working, tab_suspicious, tab_next = st.tabs(["Performance", "Red flags", "Next steps"])
 
 # ---------------------------------------------------------------------------
-# 1. What's working
+# 1. Performance
 # ---------------------------------------------------------------------------
 with tab_working:
     # Deliberately NO single blended completion rate. The domain packet warns
@@ -105,19 +102,19 @@ with tab_working:
     _worst, _best = _ranked.iloc[0], _ranked.iloc[-1]
     if _worst["completion_hi"] < _best["completion_lo"]:
         st.success(
-            f"**{_best['workflow']} and {_ranked.iloc[-2]['workflow']} are effectively "
-            f"tied** at ~{_best['completion_rate']:.0%} completion. "
-            f"**{_worst['workflow']} is genuinely behind, not just unlucky**: its 95% "
-            f"interval ({_worst['completion_lo']:.1%}-{_worst['completion_hi']:.1%}, "
-            f"n={int(_worst['sessions_total']):,} sessions) does not overlap "
+            f"**{_best['workflow']} and {_ranked.iloc[-2]['workflow']} are tied** at "
+            f"~{_best['completion_rate']:.0%} completion. "
+            f"**{_worst['workflow']} is behind, and it is not bad luck.** Its 95% interval "
+            f"({_worst['completion_lo']:.1%}-{_worst['completion_hi']:.1%}, "
+            f"n={int(_worst['sessions_total']):,} sessions) clears "
             f"{_best['workflow']}'s "
-            f"({_best['completion_lo']:.1%}-{_best['completion_hi']:.1%}). It also trails "
-            f"on acceptance and leads on flag rate — three signals agreeing."
+            f"({_best['completion_lo']:.1%}-{_best['completion_hi']:.1%}) with no overlap. "
+            f"It also trails on acceptance and leads on flag rate. Three signals agree."
         )
     else:
         st.info(
-            "No workflow separates from the others once sampling error is accounted for — "
-            "the 95% completion-rate intervals overlap, so treat this ranking as provisional."
+            "No workflow separates from the others once sampling error is accounted for. "
+            "The 95% completion-rate intervals overlap, so treat this ranking as provisional."
         )
 
     # The table is evidence for the claim above, not the claim itself, so it
@@ -132,12 +129,12 @@ with tab_working:
         render_table(_display, fmt={k: v for k, v in _fmt_all.items() if k in _display.columns})
         st.caption(
             "Rates are completed-weighted, so a 4-session day cannot swing the week the way "
-            "a 140-session one would. Concern tags rate the *data*, not the workflow — see "
-            "Data Trust Center for the rule."
+            "a 140-session one would. Concern tags rate the *data*, not the workflow. "
+            "Data Trust Center has the rule."
         )
 
 # ---------------------------------------------------------------------------
-# 2. What looks suspicious
+# 2. Red flags
 # ---------------------------------------------------------------------------
 with tab_suspicious:
     headline = build_confidence_quality_headline(clean_df, issues)
@@ -146,11 +143,11 @@ with tab_suspicious:
     render_prompt_change_panel(clean_df, issues)
 
 # ---------------------------------------------------------------------------
-# 3. What to do next
+# 3. Next steps
 # ---------------------------------------------------------------------------
 with tab_next:
     st.caption(
-        "Five things, most urgent first. Each opens to the reasoning and the rows behind it."
+        "Five items, most urgent first. Each opens to the reasoning and the rows behind it."
     )
     for severity, headline_text, detail in NEXT_ACTIONS:
         with st.expander(f"**{severity}** · {headline_text}"):

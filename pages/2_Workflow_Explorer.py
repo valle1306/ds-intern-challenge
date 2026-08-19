@@ -118,8 +118,8 @@ with tab_trend:
         wf_clean,
         groupby_col="source",
         empty_message=(
-            "No daily trend to show for this workflow — there's no "
-            "completed/sessions data to compute a completion rate from."
+            "No daily trend for this workflow. There is no completed/sessions data to "
+            "compute a completion rate from."
         ),
     )
     if selected == "Reply draft":

@@ -109,15 +109,18 @@ assert len(at.dataframe) == 0, "Home must render no tables"
 assert len(at.metric) == 0, "Home must render no KPI cards"
 _md = _non_css_markdown(at)
 assert any("sd-hero--compact" in m.value for m in _md), "compact hero not found"
-assert any("sd-guide-card" in m.value for m in _md), "guidance cards not found"
-# The verdict lines are computed from the pipeline, not written down.
-_verdict = chr(10).join(m.value for m in _md)
-assert "sd-stat-band" in _verdict, "hero stat band missing"
-# Both hero figures are computed: the naive gain and the adjusted one it collapses to.
-assert "+4.4pp" in _verdict and "+0.0pp" in _verdict, "hero stat figures wrong"
-assert "The win was the row, not the" in _verdict, "hero stat conclusion missing"
-assert "Feedback clustering" in _verdict, "worst-workflow finding missing"
-assert "Confidence is not quality" in _verdict, "confidence finding missing"
+_home = chr(10).join(m.value for m in _md)
+# The pitch block must render in the app theme colour, not as plain text.
+assert ":primary[" in _home, "pitch heading is not theme-coloured"
+assert "One export in" in _home, "pitch heading missing"
+# Sample-week findings are collapsed, and labelled as sample data rather than
+# presented as permanent product facts.
+_labels = [e.label for e in at.expander]
+assert _labels == ["Findings from the bundled sample week"], _labels
+assert "Feedback clustering" in _home, "worst-workflow finding missing"
+assert "Confidence is not quality" in _home, "confidence finding missing"
+# The backend-decision hero stat was removed; it must not come back.
+assert "sd-stat-band" not in _home, "hero stat band should be gone"
 # Navigation must actually render. An earlier version styled a testid that does
 # not exist in the Streamlit bundle, so the links shipped bare and unnoticed.
 _nav = at.get("page_link")
@@ -126,7 +129,7 @@ _targets = {pl.page for pl in _nav}
 assert _targets == {
     "Weekly_Findings", "Workflow_Explorer", "Data_Trust_Center", "Upload_Your_Own_Week"
 }, _targets
-print("OK: app.py (launcher: no tables/charts, computed hero stat, 4 nav links)")
+print("OK: app.py (launcher: themed pitch, collapsed sample findings, 4 nav links)")
 
 # ---------------------------------------------------------------------------
 # pages/1_Weekly_Findings.py -- the analysis, three tabs
@@ -139,12 +142,13 @@ _md = _non_css_markdown(at)
 assert any("sd-tag-strip" in m.value for m in _md), "concern-tag strip not found"
 assert any("not robust" in m.value for m in _md), "prompt-change verdict not rendered"
 # The CI-backed ranking claim must take the computed non-overlap branch.
-assert any("does not overlap" in s_.value for s_ in at.success), "CI ranking claim not rendered"
+assert any("with no overlap" in s_.value for s_ in at.success), "CI ranking claim not rendered"
 # All five next-actions render, collapsed, most urgent first.
 _labels = [e.label for e in at.expander]
 assert sum(1 for lbl in _labels if lbl.startswith("**High**")) == 2, _labels
 assert any("Full weekly rollup table" in lbl for lbl in _labels), _labels
 assert len([lbl for lbl in _labels if lbl.startswith("**")]) == 5, _labels
+assert len(at.tabs) == 3, f"expected 3 tabs, got {len(at.tabs)}"
 print("OK: pages/1_Weekly_Findings.py (3 tabs, CI claim, verdict, 5 collapsed actions)")
 
 # ---------------------------------------------------------------------------

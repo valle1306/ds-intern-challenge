@@ -104,7 +104,7 @@ Completion rates carry a 95% **Wilson score interval**, not a bare point estimat
 rather than the textbook normal approximation because it never produces bounds outside
 0-100% and it stays sane at small n -- rows in this export go down to 4 and 5 sessions, where
 the normal approximation is simply wrong. This is what lets the Overview say Feedback
-clustering is *genuinely* behind rather than merely lower: its interval doesn't overlap Lead
+clustering is behind rather than merely lower: its interval doesn't overlap Lead
 summary's.
 """,
     'Prompt-change comparison': """

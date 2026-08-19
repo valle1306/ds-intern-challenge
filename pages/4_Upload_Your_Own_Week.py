@@ -36,7 +36,7 @@ inject_custom_css()
 st.title("Upload Your Own Week")
 st.markdown(
     "Run this exact same cleaning, issue-detection, and rollup pipeline on your own "
-    "SignalDesk export. Nothing is stored — everything is recomputed fresh in this session."
+    "SignalDesk export. Nothing is stored. Everything is recomputed fresh in this session."
 )
 
 uploaded = st.file_uploader("CSV file", type="csv")
