@@ -141,71 +141,15 @@ _CUSTOM_CSS = """
 [data-testid="stDataFrame"] { border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md); overflow: hidden; }
 [data-testid="stExpander"] { border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md); box-shadow: var(--sd-shadow-sm); overflow: hidden; }
 [data-testid="stAlertContainer"] { border-radius: var(--sd-radius-md); box-shadow: var(--sd-shadow-sm); }
-/* --- Home launcher: compact hero + guidance cards ---------------------- */
+/* --- Home launcher: compact hero ------------------------------------- */
 .sd-hero--compact { padding: var(--sd-space-4) var(--sd-space-5); margin-bottom: var(--sd-space-4); }
 .sd-hero--compact .sd-hero-title { font-size: 1.75rem; }
 .sd-hero--compact .sd-hero-subtitle { font-size: 1rem; margin-bottom: var(--sd-space-1); }
-
-.sd-guide-grid {
-  display: grid; grid-template-columns: 1fr 2fr;
-  gap: var(--sd-space-4); margin-bottom: var(--sd-space-5);
-}
-@media (max-width: 700px) { .sd-guide-grid { grid-template-columns: 1fr; } }
-.sd-guide-card {
-  background: #FFFFFF; border: 1px solid var(--sd-slate-200);
-  border-radius: var(--sd-radius-md); padding: var(--sd-space-4) var(--sd-space-5);
-  box-shadow: var(--sd-shadow-sm);
-}
-.sd-guide-card p { font-size: 0.9rem; color: var(--sd-slate-600); line-height: 1.55; margin: 0; }
-.sd-guide-eyebrow {
-  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--sd-indigo-600); margin-bottom: var(--sd-space-2);
-}
-.sd-guide-card--verdict { background: var(--sd-indigo-50); border-color: var(--sd-indigo-100); }
-.sd-verdict-list { margin: 0; padding-left: 1.1rem; }
-.sd-verdict-list li {
-  font-size: 0.9rem; color: var(--sd-slate-900); line-height: 1.5;
-  margin-bottom: var(--sd-space-2);
-}
-.sd-verdict-list li:last-child { margin-bottom: 0; }
 
 .sd-nav-label {
   font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--sd-slate-500); margin-bottom: var(--sd-space-2);
 }
-
-/* Hero stat -- the front page's focal point. Deliberately the only place in
-   the app with type this large, so it reads as the headline and nothing
-   competes with it. */
-.sd-stat-band {
-  display: flex; align-items: center; gap: var(--sd-space-6); flex-wrap: wrap;
-  background: #FFFFFF; border: 1px solid var(--sd-indigo-100);
-  border-left: 4px solid var(--sd-indigo-600); border-radius: var(--sd-radius-lg);
-  padding: var(--sd-space-5) var(--sd-space-6); margin-bottom: var(--sd-space-4);
-  box-shadow: var(--sd-shadow-md);
-}
-.sd-stat-figure {
-  display: flex; align-items: baseline; gap: var(--sd-space-3);
-  font-variant-numeric: tabular-nums; white-space: nowrap;
-}
-.sd-stat-before {
-  font-size: 2.5rem; font-weight: 800; letter-spacing: -0.03em;
-  color: var(--sd-slate-300); text-decoration: line-through;
-}
-.sd-stat-arrow { font-size: 1.5rem; color: var(--sd-slate-300); }
-.sd-stat-after {
-  font-size: 3.25rem; font-weight: 800; letter-spacing: -0.03em;
-  color: var(--sd-indigo-700); line-height: 1;
-}
-.sd-stat-copy { flex: 1; min-width: 320px; }
-.sd-stat-eyebrow {
-  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--sd-indigo-600); margin-bottom: var(--sd-space-1);
-}
-.sd-stat-copy p {
-  font-size: 0.9375rem; color: var(--sd-slate-600); line-height: 1.55; margin: 0; max-width: 78ch;
-}
-.sd-stat-copy strong { color: var(--sd-slate-900); }
 
 /* --- Tab bar ----------------------------------------------------------- */
 [data-testid="stTabs"] [data-baseweb="tab-list"] {
@@ -485,8 +429,8 @@ def build_confidence_quality_headline(clean_df: pd.DataFrame, issues: pd.DataFra
         )
     r = match.iloc[0]
     date_str = pd.Timestamp(d["date"]).strftime("%Y-%m-%d") if pd.notna(d["date"]) else "that day"
-    completion_pct = f"{r['completion_rate'] * 100:.0f}%" if pd.notna(r["completion_rate"]) else "an unusually low rate"
-    rating = f"{r['user_rating']:.1f}" if pd.notna(r["user_rating"]) else "an unusually low rating"
+    completion_pct = f"{r['completion_rate'] * 100:.0f}%" if pd.notna(r["completion_rate"]) else "a sharply lower rate"
+    rating = f"{r['user_rating']:.1f}" if pd.notna(r["user_rating"]) else "a sharply lower rating"
     confidence = f"{r['median_confidence']:.2f}" if pd.notna(r["median_confidence"]) else "its weekly high"
     return (
         f"**Confidence isn't quality.** On {date_str}, the {d['team']} / {d['workflow']} / "
