@@ -79,58 +79,54 @@ else:
     col4.metric("Total sessions", "—")
 
 # ---------------------------------------------------------------------------
-# Daily detail
+# Detail, one view per tab -- the selectbox, concern tag and KPI strip above
+# stay visible as context while you move between them
 # ---------------------------------------------------------------------------
-st.subheader("Daily detail")
-render_table(
-    wf_clean.sort_values("date"),
-    fmt={
-        "completion_rate": "{:.1%}",
-        "acceptance_rate": "{:.1%}",
-        "flag_rate": "{:.1%}",
-    },
+tab_daily, tab_source, tab_trend, tab_issues = st.tabs(
+    ["Daily detail", "By source", "Trend", "Issues"]
 )
 
-# ---------------------------------------------------------------------------
-# By source
-# ---------------------------------------------------------------------------
-st.subheader("By source")
-_src = source_level_rollup(wf_clean).drop(columns=["team", "workflow"])
-render_table(
-    _src,
-    fmt={
-        "completion_rate": "{:.1%}",
-        "acceptance_rate": "{:.1%}",
-        "flag_rate": "{:.1%}",
-        "sessions_total": "{:,.0f}",
-    },
-)
-st.caption(
-    "Same completed-weighted formulas as the workflow-level rollup, one level deeper by "
-    "source -- a workflow's blended number can hide real differences in how its sessions "
-    "come in."
-)
+with tab_daily:
+    render_table(
+        wf_clean.sort_values("date"),
+        fmt={
+            "completion_rate": "{:.1%}",
+            "acceptance_rate": "{:.1%}",
+            "flag_rate": "{:.1%}",
+        },
+    )
 
-# ---------------------------------------------------------------------------
-# Daily trend
-# ---------------------------------------------------------------------------
-st.subheader("Daily trend")
-render_daily_trend(
-    wf_clean,
-    groupby_col="source",
-    empty_message=(
-        "No daily trend to show for this workflow — there's no "
-        "completed/sessions data to compute a completion rate from."
-    ),
-)
-if selected == "Reply draft":
-    render_change_point_note(wf_clean, source="queue", change_date="2026-08-07")
+with tab_source:
+    _src = source_level_rollup(wf_clean).drop(columns=["team", "workflow"])
+    render_table(
+        _src,
+        fmt={
+            "completion_rate": "{:.1%}",
+            "acceptance_rate": "{:.1%}",
+            "flag_rate": "{:.1%}",
+            "sessions_total": "{:,.0f}",
+        },
+    )
+    st.caption(
+        "Same completed-weighted formulas as the workflow-level rollup, one level deeper by "
+        "source -- a workflow's blended number can hide real differences in how its sessions "
+        "come in."
+    )
 
-# ---------------------------------------------------------------------------
-# Issues for this workflow
-# ---------------------------------------------------------------------------
-st.subheader("Issues for this workflow")
-render_issues_panel(
-    wf_issues,
-    empty_message="No issues detected for this workflow this week.",
-)
+with tab_trend:
+    render_daily_trend(
+        wf_clean,
+        groupby_col="source",
+        empty_message=(
+            "No daily trend to show for this workflow — there's no "
+            "completed/sessions data to compute a completion rate from."
+        ),
+    )
+    if selected == "Reply draft":
+        render_change_point_note(wf_clean, source="queue", change_date="2026-08-07")
+
+with tab_issues:
+    render_issues_panel(
+        wf_issues,
+        empty_message="No issues detected for this workflow this week.",
+    )

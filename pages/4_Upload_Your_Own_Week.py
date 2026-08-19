@@ -10,6 +10,7 @@ import streamlit as st
 
 from data_processing import (
     REQUIRED_COLUMNS,
+    find_prompt_change_date,
     clean,
     detect_issues,
     load_raw,
@@ -73,60 +74,57 @@ except Exception as e:
     st.stop()
 
 # ---------------------------------------------------------------------------
-# Headline warning — the confidence-vs-quality trap
+# KPI strip stays above the tabs as persistent context for the file just loaded
 # ---------------------------------------------------------------------------
-headline = build_confidence_quality_headline(clean_df, issues)
-if headline:
-    st.warning(headline)
-else:
-    st.success("No confidence-vs-quality divergence detected in this file.")
-
-# ---------------------------------------------------------------------------
-# KPI strip
-# ---------------------------------------------------------------------------
-_total_sessions = int(clean_df["sessions"].sum())
 _sessions_sum = clean_df["sessions"].sum()
-_overall_completion_rate = (
-    clean_df["completed"].sum() / _sessions_sum if _sessions_sum else 0.0
-)
-_n_issues = len(issues)
-_dupes_removed = raw.shape[0] - clean_df.shape[0]
-
 col1, col2, col3, col4 = st.columns(4)
-col1.metric("Total sessions", f"{_total_sessions:,}")
-col2.metric("Overall completion rate", f"{_overall_completion_rate * 100:.1f}%")
-col3.metric("Issues flagged", f"{_n_issues:,}")
-col4.metric("Duplicate rows removed", f"{_dupes_removed:,}")
+col1.metric("Sessions analyzed", f"{int(_sessions_sum):,}")
+col2.metric(
+    "Overall completion rate",
+    f"{(clean_df['completed'].sum() / _sessions_sum if _sessions_sum else 0.0) * 100:.1f}%",
+)
+col3.metric("Issues flagged", f"{len(issues):,}")
+col4.metric("Duplicate rows removed", f"{raw.shape[0] - clean_df.shape[0]:,}")
 
-# ---------------------------------------------------------------------------
-# Weekly rollup by workflow
-# ---------------------------------------------------------------------------
-st.subheader("Weekly rollup by workflow")
-render_concern_tag_strip(rollup, issues)
+tab_summary, tab_prompt, tab_issues = st.tabs(["Summary", "Prompt change", "Issues"])
 
-_fmt_all = {
-    "completion_rate": "{:.1%}",
-    "acceptance_rate": "{:.1%}",
-    "flag_rate": "{:.1%}",
-    "avg_minutes_saved": "{:.1f}",
-    "median_confidence": "{:.2f}",
-    "user_rating": "{:.1f}",
-    "sessions_total": "{:,.0f}",
-}
-_display_rollup = with_ci_display(rollup)
-_fmt = {k: v for k, v in _fmt_all.items() if k in _display_rollup.columns}
+with tab_summary:
+    headline = build_confidence_quality_headline(clean_df, issues)
+    if headline:
+        st.warning(headline)
+    else:
+        st.success("No confidence-vs-quality divergence detected in this file.")
 
-render_table(_display_rollup, fmt=_fmt)
-render_rate_comparison_chart(rollup)
+    render_concern_tag_strip(rollup, issues)
 
-# ---------------------------------------------------------------------------
-# Prompt-change comparison -- self-gating: renders nothing when this file has
-# no "new prompt version started" note, so an ordinary week just skips it
-# ---------------------------------------------------------------------------
-render_prompt_change_panel(clean_df, issues)
+    _fmt_all = {
+        "completion_rate": "{:.1%}",
+        "acceptance_rate": "{:.1%}",
+        "flag_rate": "{:.1%}",
+        "avg_minutes_saved": "{:.1f}",
+        "median_confidence": "{:.2f}",
+        "user_rating": "{:.1f}",
+        "sessions_total": "{:,.0f}",
+    }
+    # row_count is kept here, unlike on Weekly Findings: for an unknown file it
+    # is real diagnostic context for how much data backs each row.
+    _display_rollup = with_ci_display(rollup)
+    render_table(
+        _display_rollup,
+        fmt={k: v for k, v in _fmt_all.items() if k in _display_rollup.columns},
+    )
+    render_rate_comparison_chart(rollup)
 
-# ---------------------------------------------------------------------------
-# Detected issues
-# ---------------------------------------------------------------------------
-st.subheader("Detected issues")
-render_issues_panel(issues)
+with tab_prompt:
+    # Self-gating: renders nothing when this file has no "new prompt version
+    # started" note, so an ordinary week gets an explanation instead of a blank.
+    if find_prompt_change_date(clean_df) is None:
+        st.info(
+            "No prompt-change analysis for this file: no row's `notes` mention a new prompt "
+            "version, so there is no before/after boundary to compare across."
+        )
+    else:
+        render_prompt_change_panel(clean_df, issues)
+
+with tab_issues:
+    render_issues_panel(issues)
