@@ -14,8 +14,21 @@ deployed app.
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
-from data_processing import load_raw, clean
-from ui_helpers import concern_tag, source_level_rollup, _rate_comparison_data
+from data_processing import (
+    clean,
+    detect_issues,
+    find_prompt_change_date,
+    load_raw,
+    prompt_change_comparison,
+    weekly_rollup,
+)
+from ui_helpers import (
+    _prompt_change_verdict,
+    _rate_comparison_data,
+    concern_tag,
+    source_level_rollup,
+    with_ci_display,
+)
 
 SAMPLE_CSV = "sample-data/product_usage_events.csv"
 
@@ -52,7 +65,27 @@ assert abs(_src.loc["email", "completion_rate"] - 0.84) < 1e-6, _src.loc["email"
 assert abs(_src.loc["manual", "completion_rate"] - 0.70) < 1e-6, _src.loc["manual", "completion_rate"]
 assert source_level_rollup(pd.DataFrame()).empty
 
-print("OK: pure-function checks passed (concern_tag, _rate_comparison_data, source_level_rollup)")
+# with_ci_display: one readable interval column, raw bounds gone, order kept.
+_issues = detect_issues(load_raw(), _clean_df)
+_rollup = weekly_rollup(_clean_df, _issues)
+_ci = with_ci_display(_rollup)
+assert "completion_ci" in _ci.columns and "completion_lo" not in _ci.columns
+assert list(_ci.columns).index("completion_ci") == list(_ci.columns).index("completion_rate") + 1
+assert _ci.set_index("workflow").loc["Feedback clustering", "completion_ci"] == "60.0%-72.7%"
+assert with_ci_display(pd.DataFrame()).empty
+
+# The prompt-change verdict must name the workflow whose apparent effect
+# collapses, and must stay silent when there is nothing to contradict.
+_pc = prompt_change_comparison(_clean_df, _issues, find_prompt_change_date(_clean_df))
+_verdict = _prompt_change_verdict(_pc)
+assert _verdict and "Lead summary" in _verdict and "+0.0pp" in _verdict, _verdict
+assert _prompt_change_verdict(pd.DataFrame()) is None
+_flat = _pc.copy()
+_flat["delta_adj"] = _flat["delta_naive"]
+assert _prompt_change_verdict(_flat) is None, "no gap between naive and adjusted -> no verdict"
+
+print("OK: pure-function checks passed (concern_tag, _rate_comparison_data, "
+      "source_level_rollup, with_ci_display, _prompt_change_verdict)")
 
 # ---------------------------------------------------------------------------
 # app.py
@@ -65,7 +98,12 @@ assert len(at.dataframe) >= 1
 _md = _non_css_markdown(at)
 assert any("sd-hero" in m.value for m in _md), "hero header not found"
 assert any("sd-tag-strip" in m.value for m in _md), "concern-tag strip not found"
-print("OK: app.py")
+assert any("not robust" in m.value for m in _md), "prompt-change verdict not rendered"
+_headers = [h.value for h in at.subheader]
+assert _headers == ["1. What's working", "2. What looks suspicious", "3. What to look at next"], _headers
+# The CI-backed ranking caption must be the computed non-overlap branch.
+assert any("does not overlap" in c.value for c in at.caption), "CI ranking caption not rendered"
+print("OK: app.py (three-question spine, CI ranking claim, prompt-change verdict)")
 
 # ---------------------------------------------------------------------------
 # pages/1_Workflow_Explorer.py -- drive the selectbox through all 3 options
@@ -122,24 +160,20 @@ assert len(at.metric) == 4
 assert any("sd-tag-strip" in m.value for m in _non_css_markdown(at))
 print("OK: pages/3_Upload_Your_Own_Week.py (real sample CSV)")
 
-# Malicious/messy notes text must render HTML-escaped, not raw. The notes
-# text must contain the literal substring "small sample" (case-insensitive)
-# to actually reach an issue description -- detect_issues' small_sample
-# detector is the only path that embeds raw notes text verbatim (repr'd) into
-# a description; other categories don't quote notes text directly. Spread
-# across 2 distinct (team, workflow, source) groups (not 1) to avoid a
-# pre-existing, out-of-scope bug in data_processing.detect_issues on pandas
-# 3.0.2 where a groupby().apply(include_groups=False) reindex step raises a
-# ValueError when a CSV's rows collapse to exactly one (team, workflow,
-# source) group -- not introduced by this change, not fixed here, tracked as
-# a known limitation.
-_malicious_csv = (
-    "date,team,workflow,source,sessions,completed,accepted_output,flagged_for_review,"
-    "avg_minutes_saved,median_confidence,user_rating,notes\n"
-    "2026-08-01,Sales,Lead summary,email,10,8,7,1,5,0.8,4,"
-    '"<script>alert(1)</script> & <b>bold</b> small sample"\n'
-    "2026-08-02,Sales,Lead summary,manual,10,8,7,1,5,0.8,4,ok\n"
-)
+# Malicious/messy notes text must render HTML-escaped, not raw. The notes text
+# must contain the literal substring "small sample" (case-insensitive) to
+# actually reach an issue description -- detect_issues' small_sample detector is
+# the only path that embeds raw notes text verbatim (repr'd) into a description.
+#
+# This fixture is deliberately a SINGLE (team, workflow, source) group, which
+# also covers the pandas 3.0.x "Buffer dtype mismatch" crash that
+# groupby().apply() used to raise on single-group frames -- now fixed by
+# data_processing._group_flag_mask.
+_malicious_csv = """date,team,workflow,source,sessions,completed,accepted_output,flagged_for_review,avg_minutes_saved,median_confidence,user_rating,notes
+2026-08-01,Sales,Lead summary,email,10,8,7,1,5,0.8,4,"<script>alert(1)</script> & <b>bold</b> small sample"
+2026-08-02,Sales,Lead summary,email,10,8,7,1,5,0.8,4,ok
+"""
+
 at = AppTest.from_file("pages/3_Upload_Your_Own_Week.py")
 at.run(timeout=30)
 at.file_uploader[0].set_value(("malicious.csv", _malicious_csv.encode(), "text/csv")).run(timeout=30)
