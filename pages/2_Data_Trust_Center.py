@@ -9,13 +9,14 @@ elsewhere in this app were computed.
 import pandas as pd
 import streamlit as st
 
-from ui_helpers import load_sample_pipeline, render_issues_panel
+from ui_helpers import inject_custom_css, load_sample_pipeline, render_concern_tag_strip, render_issues_panel
 from labels import CATEGORY_LABELS
 
 # ---------------------------------------------------------------------------
 # Page setup
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="SignalDesk · Data Trust Center", layout="wide")
+inject_custom_css()
 st.title("Data Trust Center")
 st.caption(
     "Everything found wrong with this week's export, and exactly how the numbers "
@@ -39,6 +40,9 @@ else:
         issues["severity"].str.title(),
     )
     st.dataframe(summary)
+
+render_concern_tag_strip(rollup, issues)
+st.caption("See Methodology below for exactly how each concern tag is decided.")
 
 # ---------------------------------------------------------------------------
 # Filters
@@ -93,6 +97,20 @@ count the same as high-volume days.
   silently dropped.
 - Team names are case-normalized to each case-insensitive group's majority original spelling.
 - Blank cells and the literal text `"n/a"` are both treated as missing, never as zero.
+
+**Data-quality concern tag**
+
+Each workflow gets a one-sentence concern tag, not a blended score: **Elevated concern** if
+it has at least one high-severity issue this week, else **Watch** if it has at least one
+medium-severity issue, else **Low concern**. A raw issue count alone ranks workflows
+unfairly -- Product has more total issues than Sales this week but zero high-severity ones,
+while Sales has two.
+
+**Source-level rollup**
+
+The Workflow Explorer page's "By source" table uses these exact same rate formulas, grouped
+one level deeper by `source` instead of just `team`/`workflow` -- a workflow's blended
+weekly number can hide real differences in how its sessions come in.
 
 **Term definitions**
 
