@@ -16,7 +16,9 @@ COLUMN_LABELS: dict[str, str] = {
     "accepted_output": "Accepted output",
     "flagged_for_review": "Flagged for review",
     "avg_minutes_saved": "Avg. minutes saved",
-    "median_confidence": "Median confidence",
+    # The app's headline finding is that confidence is not quality, so the column
+# header says so every time the number is read.
+    "median_confidence": "Model confidence (not quality)",
     "user_rating": "User rating",
     "notes": "Notes",
     "completion_rate": "Completion rate",
