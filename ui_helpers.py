@@ -288,6 +288,17 @@ def _rate_comparison_data(rollup: pd.DataFrame) -> pd.DataFrame:
     return rollup.set_index("workflow")[cols].rename(columns=COLUMN_LABELS)
 
 
+# Categorical slots (blue / orange / aqua), NOT three steps of one indigo.
+# The three series are identities, not magnitudes, so a sequential ramp would
+# imply an ordering that isn't there. The previous indigo ramp also failed
+# validation outright: its lightest step sat outside the lightness band, read as
+# gray (chroma 0.06), and hit only 1.45:1 against the surface -- flag rate was
+# effectively invisible. These three pass every check including all-pairs CVD
+# separation. Aqua lands at 2.74:1, under the 3:1 bar, which the relief rule
+# permits because the full rollup table renders directly above this chart.
+_RATE_SERIES_COLORS = ["#2A78D6", "#EB6834", "#1BAF7A"]
+
+
 def render_rate_comparison_chart(rollup: pd.DataFrame) -> None:
     """Grouped (not stacked) bar chart of completion/acceptance/flag rate per
     workflow, straight off weekly_rollup's own columns -- no new math."""
@@ -295,7 +306,12 @@ def render_rate_comparison_chart(rollup: pd.DataFrame) -> None:
     if chart_df.empty:
         st.info("No rollup data to chart.")
         return
-    st.bar_chart(chart_df, stack=False, color=["#4F46E5", "#818CF8", "#C7D2FE"], height=320)
+    st.bar_chart(chart_df, stack=False, color=_RATE_SERIES_COLORS, height=320)
+    st.caption(
+        "Read flag rate in the opposite direction from the other two: taller is worse, and "
+        "per the domain packet it is ambiguous even then -- more flags can mean worse output, "
+        "stricter review, or simply more careful users."
+    )
 
 
 def source_level_rollup(wf_clean: pd.DataFrame) -> pd.DataFrame:

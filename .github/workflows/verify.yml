@@ -1,0 +1,23 @@
+# Runs the same two commands the README tells a reviewer to run, so "does it
+# run?" is answered by a green check rather than by taking our word for it.
+name: verify
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version-file: .python-version
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Data-layer self-check
+        run: python data_processing.py
+      - name: End-to-end app checks
+        run: python verify_app.py

@@ -480,11 +480,10 @@ def high_severity_row_mask(clean_df: pd.DataFrame, issues: pd.DataFrame) -> pd.S
     high = issues[issues["severity"].str.lower() == "high"]
     if high.empty:
         return mask
-    keys = set(zip(high["date"], high["team"], high["workflow"], high["source"]))
-    for idx, r in clean_df.iterrows():
-        if (r["date"], r["team"], r["workflow"], r["source"]) in keys:
-            mask.loc[idx] = True
-    return mask
+    key_cols = ["date", "team", "workflow", "source"]
+    rows = pd.MultiIndex.from_frame(clean_df[key_cols])
+    flagged = pd.MultiIndex.from_frame(high[key_cols])
+    return pd.Series(rows.isin(flagged), index=clean_df.index)
 
 
 # Completed-weighted before/after rates around a prompt change, naive and adjusted.
