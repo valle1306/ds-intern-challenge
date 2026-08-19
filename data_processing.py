@@ -7,6 +7,8 @@ signatures below stable since app.py depends on them.
 
 from __future__ import annotations
 
+import io
+
 import pandas as pd
 
 DATA_PATH = "sample-data/product_usage_events.csv"
@@ -23,14 +25,40 @@ NUMERIC_COLS = [
 
 ISSUE_COLUMNS = ["category", "date", "team", "workflow", "source", "description", "severity"]
 
+REQUIRED_COLUMNS = [
+    "date", "team", "workflow", "source", "sessions", "completed",
+    "accepted_output", "flagged_for_review", "avg_minutes_saved",
+    "median_confidence", "user_rating", "notes",
+]
+
 
 # Read the CSV with no type coercion so raw values like "" and "n/a" stay literal.
 def load_raw(path: str = DATA_PATH) -> pd.DataFrame:
     """Read every cell as its literal source string -- no NA coercion yet.
 
     A blank cell reads as "" and the literal text "n/a" stays "n/a".
+
+    `path` may be the default sample-data path, another CSV path, or any
+    file-like/bytes buffer accepted by pandas.read_csv's filepath_or_buffer
+    (e.g. a Streamlit UploadedFile from st.file_uploader, or io.BytesIO).
     """
     return pd.read_csv(path, dtype=str, keep_default_na=False, na_filter=False)
+
+
+# Check a raw DataFrame has the required columns and at least one data row.
+def validate_schema(raw: pd.DataFrame) -> list[str]:
+    """Return a list of human-readable schema problems with `raw` (empty
+    list = valid). Checks required-column presence and non-emptiness only;
+    does not mutate raw. Call before clean()/detect_issues() on any
+    non-bundled (e.g. uploaded) CSV.
+    """
+    problems: list[str] = []
+    missing = [c for c in REQUIRED_COLUMNS if c not in raw.columns]
+    if missing:
+        problems.append("Missing required column(s): " + ", ".join(missing))
+    if raw.empty:
+        problems.append("The file has no data rows.")
+    return problems
 
 
 # Pick the majority original spelling for a case-insensitive team-name group.
@@ -382,10 +410,15 @@ if __name__ == "__main__":
     assert clean_df['user_rating'].isna().sum() >= 1
     assert len(issues) >= 8, f"expected >=8 issues, got {len(issues)}"
     assert rollup.shape[0] == 3, f"expected 3 rollup rows, got {rollup.shape[0]}"
+    _buf_raw = load_raw(io.BytesIO(open(DATA_PATH, "rb").read()))
+    assert _buf_raw.equals(raw), "load_raw(buffer) must match load_raw(path) on identical bytes"
+    assert validate_schema(raw) == [], f"bundled sample data should pass validate_schema, got {validate_schema(raw)}"
+    assert validate_schema(raw.drop(columns=["sessions"])) != [], "validate_schema must catch a missing required column"
     print(
         f"OK: {clean_df.shape[0]} clean rows, "
         f"team set is exactly {set(clean_df['team'].unique())}, "
         f"median_confidence NaN count={clean_df['median_confidence'].isna().sum()}, "
         f"user_rating NaN count={clean_df['user_rating'].isna().sum()}, "
         f"{len(issues)} issues detected, {rollup.shape[0]} rollup rows"
+        f"; buffer-load and validate_schema OK"
     )
