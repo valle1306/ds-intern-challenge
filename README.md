@@ -1,5 +1,7 @@
 # Submission README
 
+[![verify](https://github.com/valle1306/ds-intern-challenge/actions/workflows/verify.yml/badge.svg)](https://github.com/valle1306/ds-intern-challenge/actions/workflows/verify.yml)
+
 ## Track Chosen
 
 Track A — Fictional Domain Packet (SignalDesk).
@@ -12,7 +14,7 @@ The finding: the 2026-08-04 prompt change *looks* like a +4.4pp completion win f
 
 ## Who It Is For
 
-A SignalDesk product lead deciding whether to trust this week's numbers.
+A product lead deciding whether to trust this week's numbers.
 
 ## Run It
 
@@ -28,11 +30,11 @@ python verify_app.py    # end-to-end checks
 
 ## Assumptions I Made
 
-completion_rate = completed/sessions; acceptance_rate = accepted_output/completed; flag_rate = flagged_for_review/completed. Rates are completed-weighted, never an average of daily rates. Exact duplicates collapsed; team casing merged to majority spelling. Blank and literal `n/a` are missing, not zero.
+completion_rate = completed/sessions; acceptance_rate = accepted_output/completed; flag_rate = flagged_for_review/completed. Rates are completed-weighted, never an average of daily rates. Duplicates collapsed; team casing merged to majority spelling. Blank and literal `n/a` are missing, not zero.
 
 ## Data Issues Or Caveats I Noticed
 
-Ten flagged: a duplicate 08-05 row whose notes disagree, a 2.6x spike the same day, an `n/a` confidence, a blank rating, a `product`/`Product` split, two rows missing on 08-07, two small-sample rows. On 08-07 Support's completion and rating collapsed as confidence hit its weekly high — confidence is not quality. One week, no control group: nothing here is causal.
+Ten flagged: a duplicate 08-05 row whose notes disagree, a 2.6x spike the same day, an `n/a` confidence, a blank rating, a `product`/`Product` split, two rows missing on 08-07, two small-sample rows. On 08-07 Support's completion and rating collapsed as confidence peaked — confidence is not quality. One week, no control group: nothing here is causal.
 
 ## What I Would Do Next With More Time
 
