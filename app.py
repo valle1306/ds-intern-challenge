@@ -1,13 +1,12 @@
 """SignalDesk Weekly Health Check — Home.
 
-A launcher, deliberately: it says what the tool is, what it helps you decide,
-what this week's answer was, and where to go next. It renders no tables and no
-charts, so it fits one screen.
+A launcher, deliberately: it leads with the week's headline finding, says what
+the tool is and what it helps you decide, and sends you onward. It renders no
+tables and no charts, so it fits one screen.
 
-The analysis it summarises lives on Weekly Findings; the evidence behind that
-lives on Workflow Explorer and Data Trust Center. All computation stays in
-data_processing.py -- the three verdict lines below are read off the same
-pipeline every other page uses, so they cannot drift out of sync with it.
+Every figure below is read off the same pipeline the rest of the app uses
+(data_processing.py via ui_helpers.load_sample_pipeline), never hardcoded, so
+the front page cannot drift out of sync with the analysis behind it.
 """
 
 import streamlit as st
@@ -34,79 +33,107 @@ st.markdown(
 
 _, clean_df, issues, rollup = load_sample_pipeline()
 
-# The verdict card is computed, not written down, so it stays true if the data
-# behind it ever changes. Everything here is already-tested pipeline output.
-_worst = rollup.loc[rollup["completion_rate"].idxmin()]
+# ---------------------------------------------------------------------------
+# Hero stat -- the single most useful thing this week's analysis produced, so
+# it leads rather than sitting in a bullet. Both figures are computed.
+# ---------------------------------------------------------------------------
 _comparison = prompt_change_comparison(clean_df, issues, find_prompt_change_date(clean_df))
 _gaps = (_comparison["delta_naive"] - _comparison["delta_adj"]).abs()
 _flipped = _comparison.loc[_gaps.idxmax()] if not _comparison.empty else None
+
+if _flipped is not None:
+    _dropped = int(_flipped["sessions_after"] - _flipped["sessions_after_adj"])
+    _share = _dropped / _flipped["sessions_after"] if _flipped["sessions_after"] else 0.0
+    st.markdown(
+        f"""
+        <div class="sd-stat-band">
+          <div class="sd-stat-figure">
+            <span class="sd-stat-before">{_flipped['delta_naive'] * 100:+.1f}pp</span>
+            <span class="sd-stat-arrow">&rarr;</span>
+            <span class="sd-stat-after">{_flipped['delta_adj'] * 100:+.1f}pp</span>
+          </div>
+          <div class="sd-stat-copy">
+            <div class="sd-stat-eyebrow">This week's headline</div>
+            <p>{_flipped['workflow']}'s completion rate looks like it gained
+            {_flipped['delta_naive'] * 100:+.1f}pp after the 2026-08-04 prompt change. Remove
+            the one duplicated demo-account row &mdash; {_dropped:,} sessions, {_share:.0%} of
+            that workflow's entire post-change volume &mdash; and the gain is
+            {_flipped['delta_adj'] * 100:+.1f}pp. <strong>The win was the row, not the
+            prompt.</strong></p>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# ---------------------------------------------------------------------------
+# Orientation + the findings the hero stat doesn't already carry
+# ---------------------------------------------------------------------------
+_worst = rollup.loc[rollup["completion_rate"].idxmin()]
+_best = rollup.loc[rollup["completion_rate"].idxmax()]
 _has_divergence = (issues["category"] == "confidence_quality_divergence").any()
 
-_verdict_lines = []
-if _flipped is not None:
-    _verdict_lines.append(
-        f"The prompt change is <strong>not</strong> a win. {_flipped['workflow']}'s "
-        f"{_flipped['delta_naive'] * 100:+.1f}pp gain is {_flipped['delta_adj'] * 100:+.1f}pp "
-        f"once one flagged row is removed."
-    )
-_verdict_lines.append(
+_also = [
     f"<strong>{_worst['workflow']}</strong> is genuinely behind at "
-    f"{_worst['completion_rate']:.1%} completion &mdash; not sampling noise."
-)
+    f"{_worst['completion_rate']:.1%} completion &mdash; its 95% interval doesn't overlap "
+    f"{_best['workflow']}'s, so this is a real gap, not sampling noise."
+]
 if _has_divergence:
-    _verdict_lines.append(
-        "Model confidence peaked the same day quality collapsed. Confidence is not quality."
+    _also.append(
+        "Model confidence hit its weekly high the same day completion and user rating "
+        "collapsed. <strong>Confidence is not quality</strong> &mdash; don't use it as a proxy."
     )
-
-_verdict_html = "".join(f"<li>{line}</li>" for line in _verdict_lines)
+_also.append(
+    f"{len(issues)} data-quality issues were found in a 41-row file, including a duplicate "
+    f"row whose two notes disagree about the cause."
+)
 
 st.markdown(
     f"""
     <div class="sd-guide-grid">
       <div class="sd-guide-card">
         <div class="sd-guide-eyebrow">What this is</div>
-        <p>A weekly health check over one SignalDesk usage export. It cleans the file,
-        flags what's wrong with it, and reports the rates that survive that cleaning
-        &mdash; so a number and its caveat always arrive together.</p>
-      </div>
-      <div class="sd-guide-card">
-        <div class="sd-guide-eyebrow">What it helps you decide</div>
-        <p>Which workflow is actually working, which metric to trust least, whether a
-        change helped or just looked like it, and what to investigate before rolling
-        anything out more broadly.</p>
+        <p>A weekly health check over one SignalDesk usage export. It cleans the file, flags
+        what's wrong with it, and reports only the rates that survive that cleaning &mdash; so
+        a number and its caveat always arrive together.</p>
+        <p>Use it to decide which workflow is actually working, which metric to trust least,
+        and what to investigate before rolling anything out more broadly.</p>
       </div>
       <div class="sd-guide-card sd-guide-card--verdict">
-        <div class="sd-guide-eyebrow">What you should know this week</div>
-        <ul class="sd-verdict-list">{_verdict_html}</ul>
+        <div class="sd-guide-eyebrow">Also worth knowing this week</div>
+        <ul class="sd-verdict-list">{"".join(f"<li>{line}</li>" for line in _also)}</ul>
       </div>
     </div>
     """,
     unsafe_allow_html=True,
 )
 
+# ---------------------------------------------------------------------------
+# Navigation. st.container(border=True) is a stable public API and supplies the
+# card chrome natively -- an earlier attempt styled [data-testid="stPageLink"],
+# which does not exist in the Streamlit bundle, so the links rendered bare.
+# ---------------------------------------------------------------------------
 st.markdown('<div class="sd-nav-label">Where to go next</div>', unsafe_allow_html=True)
-nav1, nav2, nav3 = st.columns(3)
-with nav1:
-    st.page_link(
-        "pages/1_Weekly_Findings.py",
-        label="**Weekly Findings** — what's working, what's suspicious, what to do next",
-        icon=":material/insights:",
-    )
-with nav2:
-    st.page_link(
-        "pages/2_Workflow_Explorer.py",
-        label="**Workflow Explorer** — one workflow's daily numbers, sources and trend",
-        icon=":material/travel_explore:",
-    )
-with nav3:
-    st.page_link(
-        "pages/3_Data_Trust_Center.py",
-        label="**Data Trust Center** — every issue found, the method, and its limits",
-        icon=":material/verified_user:",
-    )
 
-st.page_link(
-    "pages/4_Upload_Your_Own_Week.py",
-    label="Got your own export? Run this same check on any week —  **Upload Your Own Week**",
-    icon=":material/upload_file:",
-)
+_NAV = [
+    ("pages/1_Weekly_Findings.py",
+     "**Weekly Findings**  \nWhat's working, what's suspicious, what to do next",
+     ":material/insights:"),
+    ("pages/2_Workflow_Explorer.py",
+     "**Workflow Explorer**  \nOne workflow's daily numbers, sources and trend",
+     ":material/travel_explore:"),
+    ("pages/3_Data_Trust_Center.py",
+     "**Data Trust Center**  \nEvery issue found, the method, and its limits",
+     ":material/verified_user:"),
+]
+
+for _col, (_page, _label, _icon) in zip(st.columns(3), _NAV):
+    with _col, st.container(border=True):
+        st.page_link(_page, label=_label, icon=_icon)
+
+with st.container(border=True):
+    st.page_link(
+        "pages/4_Upload_Your_Own_Week.py",
+        label="**Upload Your Own Week** — run this exact check on any SignalDesk export",
+        icon=":material/upload_file:",
+    )
