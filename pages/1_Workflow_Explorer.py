@@ -8,16 +8,21 @@ renders one workflow's slice of that pipeline.
 import streamlit as st
 
 from ui_helpers import (
+    inject_custom_css,
     load_sample_pipeline,
-    render_table,
-    render_issues_panel,
+    render_change_point_note,
+    render_concern_tag,
     render_daily_trend,
+    render_issues_panel,
+    render_table,
+    source_level_rollup,
 )
 
 # ---------------------------------------------------------------------------
 # Page setup
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="SignalDesk · Workflow Explorer", layout="wide")
+inject_custom_css()
 st.title("Workflow Explorer")
 st.caption("Drill into one workflow's daily numbers, trend, and issues.")
 
@@ -55,6 +60,8 @@ wf_clean = clean_df[clean_df["workflow"] == selected]
 wf_rollup = rollup[rollup["workflow"] == selected]
 wf_issues = issues[issues["workflow"] == selected]
 
+render_concern_tag(wf_issues)
+
 # ---------------------------------------------------------------------------
 # KPI strip
 # ---------------------------------------------------------------------------
@@ -85,6 +92,26 @@ render_table(
 )
 
 # ---------------------------------------------------------------------------
+# By source
+# ---------------------------------------------------------------------------
+st.subheader("By source")
+_src = source_level_rollup(wf_clean).drop(columns=["team", "workflow"])
+render_table(
+    _src,
+    fmt={
+        "completion_rate": "{:.1%}",
+        "acceptance_rate": "{:.1%}",
+        "flag_rate": "{:.1%}",
+        "sessions_total": "{:,.0f}",
+    },
+)
+st.caption(
+    "Same completed-weighted formulas as the workflow-level rollup, one level deeper by "
+    "source -- a workflow's blended number can hide real differences in how its sessions "
+    "come in."
+)
+
+# ---------------------------------------------------------------------------
 # Daily trend
 # ---------------------------------------------------------------------------
 st.subheader("Daily trend")
@@ -96,6 +123,8 @@ render_daily_trend(
         "completed/sessions data to compute a completion rate from."
     ),
 )
+if selected == "Reply draft":
+    render_change_point_note(wf_clean, source="queue", change_date="2026-08-07")
 
 # ---------------------------------------------------------------------------
 # Issues for this workflow

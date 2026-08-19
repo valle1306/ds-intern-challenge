@@ -18,7 +18,10 @@ from data_processing import (
 )
 from ui_helpers import (
     build_confidence_quality_headline,
+    inject_custom_css,
+    render_concern_tag_strip,
     render_issues_panel,
+    render_rate_comparison_chart,
     render_table,
 )
 
@@ -26,6 +29,7 @@ from ui_helpers import (
 # Page setup
 # ---------------------------------------------------------------------------
 st.set_page_config(page_title="SignalDesk · Upload Your Own Week", layout="wide")
+inject_custom_css()
 st.title("Upload Your Own Week")
 st.markdown(
     "Run this exact same cleaning, issue-detection, and rollup pipeline on your own "
@@ -96,6 +100,7 @@ col4.metric("Duplicate rows removed", f"{_dupes_removed:,}")
 # Weekly rollup by workflow
 # ---------------------------------------------------------------------------
 st.subheader("Weekly rollup by workflow")
+render_concern_tag_strip(rollup, issues)
 
 _fmt_all = {
     "completion_rate": "{:.1%}",
@@ -109,6 +114,7 @@ _fmt_all = {
 _fmt = {k: v for k, v in _fmt_all.items() if k in rollup.columns}
 
 render_table(rollup, fmt=_fmt)
+render_rate_comparison_chart(rollup)
 
 # ---------------------------------------------------------------------------
 # Detected issues

@@ -3,11 +3,150 @@ pages/. This is the one place the Streamlit API meets the data layer
 (data_processing.py) and the label layer (labels.py); both of those stay
 free of streamlit imports by design.
 """
+import html
+
 import pandas as pd
 import streamlit as st
 
 from data_processing import load_raw, clean, detect_issues, weekly_rollup
-from labels import COLUMN_LABELS, CATEGORY_LABELS, SEVERITY_ICONS
+from labels import COLUMN_LABELS, CATEGORY_LABELS
+
+
+_CUSTOM_CSS = """
+<style>
+:root {
+  --sd-indigo-50:  #EEF2FF; --sd-indigo-100: #E0E7FF; --sd-indigo-200: #C7D2FE;
+  --sd-indigo-600: #4F46E5; --sd-indigo-700: #4338CA; --sd-indigo-900: #312E81;
+
+  --sd-slate-50:  #F8FAFC; --sd-slate-100: #F1F5F9; --sd-slate-200: #E2E8F0;
+  --sd-slate-300: #CBD5E1; --sd-slate-500: #64748B; --sd-slate-600: #475569;
+  --sd-slate-900: #0F172A;
+
+  --sd-red-50:    #FEF2F2; --sd-red-200:    #FECACA; --sd-red-700:    #B91C1C;
+  --sd-amber-50:  #FFFBEB; --sd-amber-200:  #FDE68A; --sd-amber-700:  #B45309;
+  --sd-yellow-50: #FEFCE8; --sd-yellow-200: #FEF08A; --sd-yellow-800: #854D0E;
+  --sd-green-50:  #F0FDF4; --sd-green-200:  #BBF7D0; --sd-green-700:  #15803D;
+
+  --sd-radius-sm: 8px; --sd-radius-md: 12px; --sd-radius-lg: 16px; --sd-radius-pill: 999px;
+  --sd-shadow-sm: 0 1px 2px rgba(15,23,42,.04), 0 1px 3px rgba(15,23,42,.06);
+  --sd-shadow-md: 0 2px 4px rgba(15,23,42,.04), 0 4px 12px rgba(15,23,42,.08);
+
+  --sd-space-1: 4px;  --sd-space-2: 8px;  --sd-space-3: 12px; --sd-space-4: 16px;
+  --sd-space-5: 24px; --sd-space-6: 32px; --sd-space-7: 48px;
+}
+
+[data-testid="stHeading"] h1 {
+  font-size: 2.25rem; font-weight: 800; color: var(--sd-slate-900);
+  letter-spacing: -0.02em; line-height: 1.15;
+}
+[data-testid="stHeading"] h2 {
+  font-size: 1.5rem; font-weight: 700; color: var(--sd-slate-900); letter-spacing: -0.01em;
+}
+[data-testid="stHeading"] h3 {
+  font-size: 1.125rem; font-weight: 700; color: var(--sd-slate-900);
+  padding-bottom: var(--sd-space-2); border-bottom: 1px solid var(--sd-slate-200);
+  margin-top: var(--sd-space-6); margin-bottom: var(--sd-space-4);
+}
+[data-testid="stCaptionContainer"] { color: var(--sd-slate-500); font-size: 0.875rem; }
+
+[data-testid="stMain"] { background-color: var(--sd-slate-50); }
+[data-testid="stMainBlockContainer"] { padding-top: var(--sd-space-6); padding-bottom: var(--sd-space-7); }
+[data-testid="stHorizontalBlock"] { gap: var(--sd-space-4); }
+
+[data-testid="stMetric"] {
+  background: #FFFFFF; border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md);
+  padding: var(--sd-space-4) var(--sd-space-5); box-shadow: var(--sd-shadow-sm);
+}
+[data-testid="stMetricLabel"] {
+  font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.04em; color: var(--sd-slate-500);
+}
+[data-testid="stMetricValue"] { font-size: 1.875rem; font-weight: 700; color: var(--sd-indigo-700); }
+[data-testid="stMetricDelta"] { font-size: 0.8125rem; font-weight: 600; }
+
+.sd-issue-row {
+  display: flex; align-items: flex-start; gap: var(--sd-space-3);
+  padding: var(--sd-space-2) 0; border-bottom: 1px solid var(--sd-slate-100);
+  font-size: 0.9rem; color: var(--sd-slate-900);
+}
+.sd-issue-row:last-child { border-bottom: none; }
+.sd-badge {
+  display: inline-flex; align-items: center; flex-shrink: 0; margin-top: 0.125rem;
+  padding: 0.125rem 0.625rem; border-radius: var(--sd-radius-pill);
+  font-size: 0.6875rem; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.03em; border: 1px solid transparent; line-height: 1.5;
+}
+.sd-badge--high    { background: var(--sd-red-50);    color: var(--sd-red-700);    border-color: var(--sd-red-200); }
+.sd-badge--medium  { background: var(--sd-amber-50);  color: var(--sd-amber-700);  border-color: var(--sd-amber-200); }
+.sd-badge--low     { background: var(--sd-yellow-50); color: var(--sd-yellow-800); border-color: var(--sd-yellow-200); }
+.sd-badge--default { background: var(--sd-slate-100); color: var(--sd-slate-600); border-color: var(--sd-slate-200); }
+.sd-issue-desc { flex: 1; }
+
+.sd-tag {
+  display: inline-flex; align-items: center; padding: 0.25rem 0.75rem;
+  border-radius: var(--sd-radius-pill); font-size: 0.75rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.03em; border: 1px solid transparent;
+}
+.sd-tag--elevated { background: var(--sd-red-50);   color: var(--sd-red-700);   border-color: var(--sd-red-200); }
+.sd-tag--watch    { background: var(--sd-amber-50); color: var(--sd-amber-700); border-color: var(--sd-amber-200); }
+.sd-tag--low      { background: var(--sd-green-50); color: var(--sd-green-700); border-color: var(--sd-green-200); }
+.sd-tag-row { display: flex; align-items: center; gap: var(--sd-space-3); margin: var(--sd-space-2) 0 var(--sd-space-4); }
+.sd-tag-caption { font-size: 0.875rem; color: var(--sd-slate-500); }
+.sd-tag-strip { display: flex; flex-wrap: wrap; gap: var(--sd-space-4); margin-bottom: var(--sd-space-4); }
+.sd-tag-chip {
+  display: inline-flex; align-items: center; gap: var(--sd-space-2); background: #FFFFFF;
+  border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md);
+  padding: var(--sd-space-2) var(--sd-space-3); box-shadow: var(--sd-shadow-sm);
+}
+.sd-tag-chip-name { font-size: 0.875rem; font-weight: 600; color: var(--sd-slate-900); }
+
+.sd-callout {
+  background: var(--sd-indigo-50); border: 1px solid var(--sd-indigo-100);
+  border-left: 3px solid var(--sd-indigo-600); border-radius: var(--sd-radius-md);
+  padding: var(--sd-space-4) var(--sd-space-5); margin: var(--sd-space-4) 0;
+  font-size: 0.9rem; color: var(--sd-slate-900); line-height: 1.55;
+}
+.sd-callout--annotation strong { color: var(--sd-indigo-700); }
+
+.sd-hero {
+  background: linear-gradient(135deg, var(--sd-indigo-50) 0%, #FFFFFF 100%);
+  border: 1px solid var(--sd-indigo-100); border-left: 4px solid var(--sd-indigo-600);
+  border-radius: var(--sd-radius-lg); padding: var(--sd-space-5) var(--sd-space-6);
+  margin-bottom: var(--sd-space-6);
+}
+.sd-hero-eyebrow {
+  font-size: 0.75rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--sd-indigo-600); margin-bottom: var(--sd-space-2);
+}
+.sd-hero-title  { font-size: 2.25rem; font-weight: 800; color: var(--sd-slate-900);
+  letter-spacing: -0.02em; margin: 0 0 var(--sd-space-2); line-height: 1.15; }
+.sd-hero-subtitle { font-size: 1.0625rem; color: var(--sd-slate-600); margin: 0 0 var(--sd-space-2); max-width: 70ch; }
+.sd-hero-meta   { font-size: 0.8125rem; color: var(--sd-slate-500); margin: 0; }
+
+[data-testid="stSidebarNavLink"] {
+  border-radius: var(--sd-radius-sm); margin: 2px var(--sd-space-2); font-weight: 500; color: var(--sd-slate-600);
+}
+[data-testid="stSidebarNavLink"]:hover { background-color: var(--sd-indigo-50); color: var(--sd-indigo-700); }
+[data-testid="stSidebarNavLink"][aria-current="page"] {
+  background-color: var(--sd-indigo-50); color: var(--sd-indigo-700); font-weight: 700;
+}
+
+[data-testid="stDataFrame"] { border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md); overflow: hidden; }
+[data-testid="stExpander"] { border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md); box-shadow: var(--sd-shadow-sm); overflow: hidden; }
+[data-testid="stAlertContainer"] { border-radius: var(--sd-radius-md); box-shadow: var(--sd-shadow-sm); }
+</style>
+"""
+
+
+def inject_custom_css() -> None:
+    """Inject the SignalDesk visual design system. Call once per page,
+    immediately after st.set_page_config(...), before any other st.* call.
+    Font loading and sidebar background/border are handled natively via
+    .streamlit/config.toml (theme.font, theme.sidebar, showSidebarBorder) --
+    this CSS block only covers what native theming can't reach: KPI cards,
+    severity/concern badges, headings, hero, callouts, table/expander framing.
+    """
+    st.markdown(_CUSTOM_CSS, unsafe_allow_html=True)
 
 
 @st.cache_data(show_spinner=False)
@@ -40,9 +179,18 @@ def render_table(df: pd.DataFrame, fmt: dict | None = None) -> None:
         st.dataframe(display_df, width="stretch", hide_index=True)
 
 
+_SEVERITY_BADGE = {
+    "high":   ("High",   "sd-badge--high"),
+    "medium": ("Medium", "sd-badge--medium"),
+    "low":    ("Low",    "sd-badge--low"),
+}
+
+
 def render_issues_panel(issues: pd.DataFrame, empty_message: str = "No issues detected.") -> None:
     """One st.expander per issue category present in `issues` (title from
-    CATEGORY_LABELS + count), each row prefixed with its SEVERITY_ICONS icon.
+    CATEGORY_LABELS + count), each row rendered as a severity badge + escaped
+    description. `description` may originate from user-uploaded data (Upload
+    Your Own Week) -- html.escape() every interpolated dynamic string, always.
     """
     if issues is None or issues.empty:
         st.info(empty_message)
@@ -54,8 +202,161 @@ def render_issues_panel(issues: pd.DataFrame, empty_message: str = "No issues de
         title = CATEGORY_LABELS.get(category, str(category).replace("_", " ").title())
         with st.expander(f"{title} ({len(cat_issues)})"):
             for _, row in cat_issues.iterrows():
-                icon = SEVERITY_ICONS.get(str(row.get("severity", "")).lower(), "⚪")
-                st.markdown(f"{icon} {row['description']}")
+                sev = str(row.get("severity", "")).lower()
+                label, css_class = _SEVERITY_BADGE.get(sev, (sev.title() or "Unknown", "sd-badge--default"))
+                desc = html.escape(str(row["description"]))
+                st.markdown(
+                    f'<div class="sd-issue-row"><span class="sd-badge {css_class}">{label}</span>'
+                    f'<span class="sd-issue-desc">{desc}</span></div>',
+                    unsafe_allow_html=True,
+                )
+
+
+_CONCERN_TAGS = {
+    "elevated": ("Elevated concern", "sd-tag--elevated"),
+    "watch":    ("Watch",             "sd-tag--watch"),
+    "low":      ("Low concern",       "sd-tag--low"),
+}
+
+
+def concern_tag(wf_issues: pd.DataFrame) -> tuple[str, str]:
+    """One-sentence rule over an already-filtered (single team/workflow)
+    issues slice: 'Elevated concern' if it has >=1 high-severity issue, else
+    'Watch' if it has >=1 medium-severity issue, else 'Low concern'. Returns
+    (label, css_class). Deliberately not a blended numeric score -- e.g.
+    3*high+2*medium+1*low ties Support (1h/1m/1l=6) and Product (0h/2m/2l=6)
+    despite very different severity profiles; a count-only tag rule doesn't.
+    """
+    if wf_issues is None or wf_issues.empty:
+        key = "low"
+    else:
+        sev = wf_issues["severity"].str.lower()
+        if (sev == "high").any():
+            key = "elevated"
+        elif (sev == "medium").any():
+            key = "watch"
+        else:
+            key = "low"
+    return _CONCERN_TAGS[key]
+
+
+def render_concern_tag(wf_issues: pd.DataFrame) -> None:
+    """Single concern-tag badge + caption for one already-filtered workflow
+    (Workflow Explorer)."""
+    label, css_class = concern_tag(wf_issues)
+    st.markdown(
+        f'<div class="sd-tag-row"><span class="sd-tag {css_class}">{html.escape(label)}</span>'
+        f'<span class="sd-tag-caption">data-quality signal for this workflow this week -- '
+        f'see Data Trust Center for the full issue list</span></div>',
+        unsafe_allow_html=True,
+    )
+
+
+def render_concern_tag_strip(rollup: pd.DataFrame, issues: pd.DataFrame) -> None:
+    """One concern-tag chip per (team, workflow) row in `rollup`, in rollup's
+    row order (Overview, Upload Your Own Week, Data Trust Center)."""
+    if rollup is None or rollup.empty:
+        return
+    chips = []
+    for _, r in rollup.iterrows():
+        if issues is not None and not issues.empty:
+            wf_issues = issues[(issues["team"] == r["team"]) & (issues["workflow"] == r["workflow"])]
+        else:
+            wf_issues = issues
+        label, css_class = concern_tag(wf_issues)
+        chips.append(
+            f'<span class="sd-tag-chip"><span class="sd-tag {css_class}">{html.escape(label)}</span>'
+            f'<span class="sd-tag-chip-name">{html.escape(str(r["workflow"]))}</span></span>'
+        )
+    st.markdown(f'<div class="sd-tag-strip">{"".join(chips)}</div>', unsafe_allow_html=True)
+
+
+def _rate_comparison_data(rollup: pd.DataFrame) -> pd.DataFrame:
+    """Pure data prep for the workflow rate-comparison chart: rollup's three
+    rate columns, indexed by workflow, columns renamed via COLUMN_LABELS. No
+    Streamlit calls -- unit-testable with plain pandas assertions."""
+    cols = ["completion_rate", "acceptance_rate", "flag_rate"]
+    if rollup is None or rollup.empty:
+        return pd.DataFrame(columns=[COLUMN_LABELS.get(c, c) for c in cols])
+    return rollup.set_index("workflow")[cols].rename(columns=COLUMN_LABELS)
+
+
+def render_rate_comparison_chart(rollup: pd.DataFrame) -> None:
+    """Grouped (not stacked) bar chart of completion/acceptance/flag rate per
+    workflow, straight off weekly_rollup's own columns -- no new math."""
+    chart_df = _rate_comparison_data(rollup)
+    if chart_df.empty:
+        st.info("No rollup data to chart.")
+        return
+    st.bar_chart(chart_df, stack=False, color=["#4F46E5", "#818CF8", "#C7D2FE"], height=320)
+
+
+def source_level_rollup(wf_clean: pd.DataFrame) -> pd.DataFrame:
+    """Same completed-weighted rate formulas as data_processing.weekly_rollup
+    (completion_rate=completed/sessions, acceptance_rate=accepted/completed,
+    flag_rate=flagged/completed), one level deeper: grouped by (team,
+    workflow, source) instead of just (team, workflow). Takes an
+    already-workflow-filtered clean_df slice (e.g. Workflow Explorer's
+    wf_clean). Ratios are built from summed numerators/denominators, never
+    averaging a per-row rate directly."""
+    cols = ["team", "workflow", "source", "completion_rate", "acceptance_rate",
+            "flag_rate", "sessions_total", "row_count"]
+    if wf_clean is None or wf_clean.empty:
+        return pd.DataFrame(columns=cols)
+    rows = []
+    for (team, workflow, source), group in wf_clean.groupby(["team", "workflow", "source"], sort=False):
+        sessions_total = group["sessions"].sum()
+        completed_total = group["completed"].sum()
+        accepted_total = group["accepted_output"].sum()
+        flagged_total = group["flagged_for_review"].sum()
+        rows.append({
+            "team": team, "workflow": workflow, "source": source,
+            "completion_rate": completed_total / sessions_total if sessions_total else float("nan"),
+            "acceptance_rate": accepted_total / completed_total if completed_total else float("nan"),
+            "flag_rate": flagged_total / completed_total if completed_total else float("nan"),
+            "sessions_total": sessions_total,
+            "row_count": len(group),
+        })
+    return pd.DataFrame(rows, columns=cols)
+
+
+def render_change_point_note(wf_clean: pd.DataFrame, source: str, change_date: str) -> None:
+    """Single-day-outlier note for one `source` within an already
+    workflow-filtered `wf_clean` slice. Compares the tight daily
+    completion-rate range before `change_date` against that day's own numbers
+    and notes text, with two required caveats: (1) only one day of
+    post-change data exists; (2) if the change_date row's own notes describe
+    a mid-period change, that single day's numbers are themselves a blend,
+    not a clean 'after' measurement. Never frames this as before-avg vs
+    after-avg since after n=1. No-op if there's no data both before and on
+    `change_date` for `source` -- safe to call speculatively."""
+    change_ts = pd.Timestamp(change_date)
+    sub = wf_clean[wf_clean["source"] == source]
+    pre = sub[sub["date"] < change_ts]
+    on_day = sub[sub["date"] == change_ts]
+    if pre.empty or on_day.empty:
+        return
+    daily = pre.groupby("date")[["completed", "sessions"]].sum()
+    daily["completion_rate"] = daily["completed"] / daily["sessions"]
+    lo, hi = daily["completion_rate"].min(), daily["completion_rate"].max()
+    row = on_day.iloc[0]
+    notes_txt = html.escape(str(row.get("notes", "")).strip())
+    change_date_str = html.escape(change_date)
+    source_str = html.escape(str(source))
+    st.markdown(
+        f'<div class="sd-callout sd-callout--annotation">'
+        f'<strong>{change_date_str} looks like a change point, not noise.</strong> '
+        f'{source_str} completion rate held in a tight {lo:.1%}&ndash;{hi:.1%} range across the '
+        f'{len(daily)} days before {change_date_str}, then fell to {row["completion_rate"]:.1%} '
+        f'that day (flag rate {row["flag_rate"]:.1%}, acceptance {row["acceptance_rate"]:.1%}, '
+        f'rating {row["user_rating"]:.1f}) &mdash; the same day model confidence hit its weekly '
+        f'high ({row["median_confidence"]:.2f}). That row\'s own notes: &ldquo;{notes_txt}&rdquo;.'
+        f'<br><em>Caveats:</em> only one day of post-change data exists here, so this isn\'t yet '
+        f'a confirmed new steady state; and because the change happened mid-day, this single '
+        f'day\'s numbers are themselves a blend of pre- and post-change sessions, not a clean '
+        f'"after" measurement.</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def build_confidence_quality_headline(clean_df: pd.DataFrame, issues: pd.DataFrame) -> str | None:

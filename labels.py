@@ -37,5 +37,3 @@ CATEGORY_LABELS: dict[str, str] = {
     "confidence_quality_divergence": "Confidence vs. quality divergence",
     "small_sample": "Small sample",
 }
-
-SEVERITY_ICONS: dict[str, str] = {"high": "\U0001F534", "medium": "\U0001F7E0", "low": "\U0001F7E1"}
