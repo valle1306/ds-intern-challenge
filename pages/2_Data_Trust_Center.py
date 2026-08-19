@@ -106,6 +106,24 @@ medium-severity issue, else **Low concern**. A raw issue count alone ranks workf
 unfairly -- Product has more total issues than Sales this week but zero high-severity ones,
 while Sales has two.
 
+**Confidence intervals**
+
+Completion rates carry a 95% **Wilson score interval**, not a bare point estimate. Wilson
+rather than the textbook normal approximation because it never produces bounds outside
+0-100% and it stays sane at small n -- rows in this export go down to 4 and 5 sessions, where
+the normal approximation is simply wrong. This is what lets the Overview say Feedback
+clustering is *genuinely* behind rather than merely lower: its interval doesn't overlap Lead
+summary's.
+
+**Prompt-change comparison**
+
+The days before the `new prompt version started` note vs that day onward, completed-weighted,
+computed twice: over every row, and again with the individual rows carrying a **high-severity**
+issue removed. Only those rows are dropped -- not whole days, not whole workflows. The change
+date is read from the `notes` column, never hardcoded, so an uploaded week with its own change
+date works too. The two columns disagree, and that disagreement is the finding: a naive
+before/after read credits the prompt with a contaminated row's numbers.
+
 **Source-level rollup**
 
 The Workflow Explorer page's "By source" table uses these exact same rate formulas, grouped
@@ -123,5 +141,34 @@ weekly number can hide real differences in how its sessions come in.
 - `avg_minutes_saved` is an estimate. Treat it as directional, not ground truth.
 - `median_confidence` is model-reported confidence. It is not the same as correctness.
 - `notes` may change how a row should be interpreted.
+"""
+)
+
+# ---------------------------------------------------------------------------
+# Known limitations -- the detectors are screens, not tests, and saying so
+# is part of the deliverable
+# ---------------------------------------------------------------------------
+st.subheader("Known limitations")
+st.markdown(
+    """
+These are worth knowing before anyone treats a flag here as a finding.
+
+- **The confidence-vs-quality detector is a screen, not a test.** It fires when one row is
+  simultaneously its group's highest model confidence and its lowest user rating. In a 7-row
+  group those can coincide by chance roughly one time in seven, so across this week's 8 groups
+  you would expect about one false positive even in clean data. It earns attention here because
+  the flagged row also has an independent explanation in its own `notes` (a mid-day policy
+  change) and a collapse in completion rate. Read the flag as *go look*, never as *this is real*.
+- **The spike threshold is chosen, not derived.** "More than 2x the group's median sessions
+  among its other rows" is a reasonable screen, not a significance test. A genuine 2.1x growth
+  day would be flagged; a suspicious 1.9x day would not.
+- **Missing rows assume a dense grid.** Every date x team x workflow x source combination seen
+  anywhere in the file is expected on every date. A workflow that legitimately ran on only some
+  days would be reported as having missing rows.
+- **One week, no control group.** There is no week-over-week baseline and no holdout, so
+  nothing here separates a prompt effect from a day-of-week effect or ordinary drift. The
+  prompt-change table bounds a claim; it cannot establish causation.
+- **`accepted_output` and `avg_minutes_saved` are proxies.** Both come from the packet marked as
+  rough or directional. Every rate built on them inherits that.
 """
 )

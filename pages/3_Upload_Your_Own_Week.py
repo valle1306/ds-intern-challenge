@@ -21,8 +21,10 @@ from ui_helpers import (
     inject_custom_css,
     render_concern_tag_strip,
     render_issues_panel,
+    render_prompt_change_panel,
     render_rate_comparison_chart,
     render_table,
+    with_ci_display,
 )
 
 # ---------------------------------------------------------------------------
@@ -111,10 +113,17 @@ _fmt_all = {
     "user_rating": "{:.1f}",
     "sessions_total": "{:,.0f}",
 }
-_fmt = {k: v for k, v in _fmt_all.items() if k in rollup.columns}
+_display_rollup = with_ci_display(rollup)
+_fmt = {k: v for k, v in _fmt_all.items() if k in _display_rollup.columns}
 
-render_table(rollup, fmt=_fmt)
+render_table(_display_rollup, fmt=_fmt)
 render_rate_comparison_chart(rollup)
+
+# ---------------------------------------------------------------------------
+# Prompt-change comparison -- self-gating: renders nothing when this file has
+# no "new prompt version started" note, so an ordinary week just skips it
+# ---------------------------------------------------------------------------
+render_prompt_change_panel(clean_df, issues)
 
 # ---------------------------------------------------------------------------
 # Detected issues

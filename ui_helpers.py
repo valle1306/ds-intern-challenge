@@ -8,7 +8,14 @@ import html
 import pandas as pd
 import streamlit as st
 
-from data_processing import load_raw, clean, detect_issues, weekly_rollup
+from data_processing import (
+    clean,
+    detect_issues,
+    find_prompt_change_date,
+    load_raw,
+    prompt_change_comparison,
+    weekly_rollup,
+)
 from labels import COLUMN_LABELS, CATEGORY_LABELS
 
 
@@ -416,3 +423,103 @@ def render_daily_trend(clean_df: pd.DataFrame, groupby_col: str, empty_message: 
             st.line_chart(pivoted)
     except Exception:
         st.info(empty_message)
+
+
+def with_ci_display(rollup: pd.DataFrame) -> pd.DataFrame:
+    """Collapse weekly_rollup's numeric `completion_lo`/`completion_hi` into a
+    single human-readable `completion_ci` string column ("77.3-83.7%"), placed
+    right after `completion_rate`, and drop the raw bounds.
+
+    The interval MATH lives in data_processing.wilson_interval; only its
+    FORMATTING lives here, matching this app's data/UI split. Returns the frame
+    unchanged if the bounds aren't present (e.g. an older cached rollup).
+    """
+    if rollup is None or rollup.empty or "completion_lo" not in rollup.columns:
+        return rollup
+    out = rollup.copy()
+    out["completion_ci"] = [
+        "-" if pd.isna(lo) or pd.isna(hi) else f"{lo:.1%}-{hi:.1%}"
+        for lo, hi in zip(out["completion_lo"], out["completion_hi"])
+    ]
+    out = out.drop(columns=["completion_lo", "completion_hi"])
+    cols = list(out.columns)
+    cols.insert(cols.index("completion_rate") + 1, cols.pop(cols.index("completion_ci")))
+    return out[cols]
+
+
+def _prompt_change_verdict(comparison: pd.DataFrame) -> str | None:
+    """Build the one-sentence verdict for the prompt-change panel: name the
+    workflow whose apparent change shrinks most once flagged rows are removed,
+    and quote both numbers in percentage points.
+
+    Computed from the frame, never hardcoded, so it stays true on an uploaded
+    week. Returns None when nothing was excluded and there is no gap to report.
+    """
+    if comparison is None or comparison.empty:
+        return None
+    gaps = (comparison["delta_naive"] - comparison["delta_adj"]).abs()
+    if not gaps.notna().any() or gaps.max() < 0.005:
+        return None
+    row = comparison.loc[gaps.idxmax()]
+    dropped = int(row["sessions_after"] - row["sessions_after_adj"])
+    share = dropped / row["sessions_after"] if row["sessions_after"] else 0.0
+    n_rows = int(row["rows_excluded"])
+    return (
+        f"**The apparent effect is not robust.** {row['workflow']}'s completion rate looks "
+        f"like it moved {row['delta_naive'] * 100:+.1f}pp after the prompt change. Remove the "
+        f"{n_rows} row{'' if n_rows == 1 else 's'} carrying a high-severity data-quality "
+        f"issue -- "
+        f"{dropped:,} sessions, {share:.0%} of that workflow's post-change volume -- and the "
+        f"move is {row['delta_adj'] * 100:+.1f}pp. The headline number is mostly that one row, "
+        f"not the new prompt."
+    )
+
+
+def render_prompt_change_panel(clean_df: pd.DataFrame, issues: pd.DataFrame) -> None:
+    """Before/after completion rates around the prompt-version change, shown
+    naively and with high-severity-flagged rows removed, plus a computed
+    verdict and the caveats that make the table honest.
+
+    Self-gating: renders nothing when the data has no prompt-change note, so
+    both the sample Overview and the Upload page can call it unconditionally.
+    """
+    change_date = find_prompt_change_date(clean_df)
+    if change_date is None:
+        return
+    comparison = prompt_change_comparison(clean_df, issues, change_date)
+    if comparison.empty:
+        return
+
+    change_str = pd.Timestamp(change_date).strftime("%Y-%m-%d")
+    st.markdown(f"**Did the {change_str} prompt change help?**")
+
+    display = comparison[[
+        "workflow", "completion_before", "completion_after", "delta_naive",
+        "completion_after_adj", "delta_adj", "rows_excluded",
+    ]]
+    # Only surface the adjusted "before" when exclusions actually moved it --
+    # otherwise it is a column of duplicated numbers.
+    if not comparison["completion_before"].round(6).equals(
+        comparison["completion_before_adj"].round(6)
+    ):
+        display = comparison.drop(columns=["sessions_after", "sessions_after_adj"])
+    render_table(display, fmt={
+        "completion_before": "{:.1%}", "completion_after": "{:.1%}", "delta_naive": "{:+.1%}",
+        "completion_before_adj": "{:.1%}", "completion_after_adj": "{:.1%}",
+        "delta_adj": "{:+.1%}", "rows_excluded": "{:,.0f}",
+    })
+
+    verdict = _prompt_change_verdict(comparison)
+    if verdict:
+        st.markdown(
+            f'<div class="sd-callout sd-callout--annotation">{verdict}</div>',
+            unsafe_allow_html=True,
+        )
+    st.caption(
+        f"Days before {change_str} vs {change_str} onward, completed-weighted. "
+        "\"Excl. flagged\" drops only the individual rows carrying a high-severity issue "
+        "(the duplicated demo-account spike, the confidence/quality divergence), not whole "
+        "days. This bounds a claim rather than proving one: the after-window is a few days, "
+        "it contains other events, there is no control group, and choosing to drop those rows "
+        "is itself a judgment call. Read it as \"the apparent effect is not robust.\""
+    )

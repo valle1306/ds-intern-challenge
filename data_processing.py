@@ -8,10 +8,16 @@ signatures below stable since app.py depends on them.
 from __future__ import annotations
 
 import io
+import math
 
 import pandas as pd
 
 DATA_PATH = "sample-data/product_usage_events.csv"
+
+# The `notes` text that marks the day a new prompt version went live. Rows are
+# found by substring match on this, never by a hardcoded date, so the
+# prompt-change analysis also works on an uploaded week.
+PROMPT_CHANGE_NOTE = "new prompt version started"
 
 NUMERIC_COLS = [
     "sessions",
@@ -110,6 +116,29 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df["flag_rate"] = df["flagged_for_review"] / df["completed"]
 
     return df
+
+
+# Run a per-group boolean flag function and return one index-aligned mask.
+def _group_flag_mask(df: pd.DataFrame, keys: list[str], flag_fn) -> pd.Series:
+    """Apply `flag_fn` to each (`keys`) group of `df` and stitch the per-group
+    boolean Series back into a single mask aligned to df.index.
+
+    Deliberately an explicit loop rather than DataFrameGroupBy.apply():
+    apply()'s return shape varies with the number of groups, and a frame that
+    collapses to exactly one group raises "ValueError: Buffer dtype mismatch"
+    on pandas 3.0.x. A loop is shape-stable for 0, 1, or n groups -- which
+    matters because an uploaded CSV covering a single team/workflow/source is
+    a perfectly ordinary file.
+
+    `flag_fn` receives the full group (grouping columns included) and must
+    return a boolean Series positionally matching that group's rows.
+    """
+    mask = pd.Series(False, index=df.index)
+    if df.empty:
+        return mask
+    for _, group in df.groupby(keys, sort=False):
+        mask.loc[group.index] = flag_fn(group).astype(bool).to_numpy()
+    return mask
 
 
 # Diff raw vs. clean to flag every data-quality issue found in the export.
@@ -263,13 +292,7 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
                 flags.loc[idx] = True
         return flags
 
-    if len(clean_df):
-        spike_mask = clean_df.groupby(["team", "workflow", "source"], group_keys=False).apply(
-            spike_flags, include_groups=False
-        )
-        spike_mask = spike_mask.reindex(clean_df.index, fill_value=False)
-    else:
-        spike_mask = pd.Series(dtype=bool)
+    spike_mask = _group_flag_mask(clean_df, ["team", "workflow", "source"], spike_flags)
 
     for idx in clean_df.index[spike_mask]:
         r = clean_df.loc[idx]
@@ -300,13 +323,9 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
         flags[mask] = True
         return flags
 
-    if len(clean_df):
-        divergence_mask = clean_df.groupby(["team", "workflow", "source"], group_keys=False).apply(
-            divergence_flags, include_groups=False
-        )
-        divergence_mask = divergence_mask.reindex(clean_df.index, fill_value=False)
-    else:
-        divergence_mask = pd.Series(dtype=bool)
+    divergence_mask = _group_flag_mask(
+        clean_df, ["team", "workflow", "source"], divergence_flags
+    )
 
     for idx in clean_df.index[divergence_mask]:
         r = clean_df.loc[idx]
@@ -343,6 +362,32 @@ def detect_issues(raw: pd.DataFrame, clean_df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(columns=ISSUE_COLUMNS)
 
 
+# 95% Wilson score interval for a count-based rate (e.g. completed/sessions).
+def wilson_interval(successes: float, trials: float, z: float = 1.96) -> tuple[float, float]:
+    """Return the (low, high) Wilson score interval for `successes`/`trials`.
+
+    Wilson rather than the textbook normal approximation for two reasons that
+    both bite on this data: it never produces bounds outside [0, 1], and it
+    stays sane at small n -- rows here go down to 4 and 5 sessions, where the
+    normal approximation is simply wrong. z=1.96 is the two-sided 95% level.
+
+    Returns (nan, nan) when `trials` is 0 or missing, so callers can format it
+    the same way they format any other missing value.
+    """
+    if not trials or pd.isna(trials) or pd.isna(successes) or trials <= 0:
+        return (float("nan"), float("nan"))
+    n = float(trials)
+    p = float(successes) / n
+    denom = 1.0 + z * z / n
+    centre = p + z * z / (2.0 * n)
+    margin = z * math.sqrt(p * (1.0 - p) / n + z * z / (4.0 * n * n))
+    lo = (centre - margin) / denom
+    hi = (centre + margin) / denom
+    # Clamp: at p=0 or p=1 the algebra lands a hair outside [0, 1] on floating
+    # point (e.g. -3e-17), which would render as "-0.0%".
+    return (min(max(lo, 0.0), 1.0), min(max(hi, 0.0), 1.0))
+
+
 # Weighted average of `values` by `weights`, skipping rows where either is NaN.
 def _completed_weighted_mean(values: pd.Series, weights: pd.Series) -> float:
     """Completed-weighted average, skipping NaN rows in both the value and
@@ -368,6 +413,7 @@ def weekly_rollup(clean_df: pd.DataFrame, issues: pd.DataFrame) -> pd.DataFrame:
         flagged_total = group["flagged_for_review"].sum()
 
         completion_rate = completed_total / sessions_total if sessions_total else float("nan")
+        completion_lo, completion_hi = wilson_interval(completed_total, sessions_total)
         acceptance_rate = accepted_total / completed_total if completed_total else float("nan")
         flag_rate = flagged_total / completed_total if completed_total else float("nan")
 
@@ -385,6 +431,8 @@ def weekly_rollup(clean_df: pd.DataFrame, issues: pd.DataFrame) -> pd.DataFrame:
                 "team": team,
                 "workflow": workflow,
                 "completion_rate": completion_rate,
+                "completion_lo": completion_lo,
+                "completion_hi": completion_hi,
                 "acceptance_rate": acceptance_rate,
                 "flag_rate": flag_rate,
                 "sessions_total": sessions_total,
@@ -397,6 +445,118 @@ def weekly_rollup(clean_df: pd.DataFrame, issues: pd.DataFrame) -> pd.DataFrame:
         )
 
     return pd.DataFrame(rows)
+
+
+
+# Find the date a new prompt version went live, from the notes column.
+def find_prompt_change_date(clean_df: pd.DataFrame) -> pd.Timestamp | None:
+    """Return the earliest date whose `notes` mention PROMPT_CHANGE_NOTE, or
+    None if no row does.
+
+    Read out of the data rather than hardcoded so an uploaded week with its own
+    change date works, and a week with no prompt change simply gets no
+    prompt-change analysis instead of a wrong one.
+    """
+    if clean_df is None or clean_df.empty or "notes" not in clean_df.columns:
+        return None
+    hit = clean_df["notes"].str.contains(PROMPT_CHANGE_NOTE, case=False, na=False)
+    if not hit.any():
+        return None
+    return clean_df.loc[hit, "date"].min()
+
+
+# Rows carrying a high-severity issue, as a mask over clean_df.
+def high_severity_row_mask(clean_df: pd.DataFrame, issues: pd.DataFrame) -> pd.Series:
+    """Mark every clean_df row that carries a high-severity issue, matched on
+    (date, team, workflow, source).
+
+    Deliberately surgical: it drops the individual flagged rows, not the whole
+    day and not the whole workflow, so the adjusted comparison keeps as much
+    real data as possible.
+    """
+    mask = pd.Series(False, index=clean_df.index)
+    if clean_df.empty or issues is None or issues.empty:
+        return mask
+    high = issues[issues["severity"].str.lower() == "high"]
+    if high.empty:
+        return mask
+    keys = set(zip(high["date"], high["team"], high["workflow"], high["source"]))
+    for idx, r in clean_df.iterrows():
+        if (r["date"], r["team"], r["workflow"], r["source"]) in keys:
+            mask.loc[idx] = True
+    return mask
+
+
+# Completed-weighted before/after rates around a prompt change, naive and adjusted.
+def prompt_change_comparison(
+    clean_df: pd.DataFrame, issues: pd.DataFrame, change_date
+) -> pd.DataFrame:
+    """One row per workflow comparing the days before `change_date` against
+    `change_date` onward, computed twice: over every row ("naive"), and again
+    with high-severity-flagged rows removed ("adjusted", see
+    high_severity_row_mask).
+
+    All rates are built from summed numerators and denominators, never by
+    averaging per-row rates -- the same completed-weighted rule weekly_rollup
+    uses, so a 4-session day cannot swing the result like a 140-session one.
+
+    The point of showing both columns is that they disagree: a naive before/
+    after read attributes contaminated rows to the prompt change. Workflows
+    with no rows in one of the two windows are dropped, since there is nothing
+    to compare.
+
+    IMPORTANT CAVEAT, which the UI repeats: this bounds a claim, it does not
+    prove one. The "after" window is a handful of days that also contains other
+    events, there is no control group, and removing flagged rows is itself a
+    judgment call. Read it as "the apparent effect is not robust", never as
+    "the prompt change caused X".
+    """
+    cols = [
+        "workflow", "completion_before", "completion_after", "delta_naive",
+        "completion_before_adj", "completion_after_adj", "delta_adj",
+        "sessions_after", "sessions_after_adj", "rows_excluded",
+    ]
+    if clean_df is None or clean_df.empty or change_date is None:
+        return pd.DataFrame(columns=cols)
+
+    change_ts = pd.Timestamp(change_date)
+    excluded = high_severity_row_mask(clean_df, issues)
+
+    # Completed-weighted completion rate + session count over a row subset.
+    def _rate(df):
+        sessions = df["sessions"].sum()
+        completed = df["completed"].sum()
+        return (completed / sessions if sessions else float("nan"), sessions)
+
+    rows = []
+    for workflow, group in clean_df.groupby("workflow", sort=False):
+        before = group[group["date"] < change_ts]
+        after = group[group["date"] >= change_ts]
+        if before.empty or after.empty:
+            continue
+        keep = ~excluded.loc[group.index]
+        before_adj = before[keep.loc[before.index]]
+        after_adj = after[keep.loc[after.index]]
+
+        c_before, _ = _rate(before)
+        c_after, n_after = _rate(after)
+        c_before_adj, _ = _rate(before_adj)
+        c_after_adj, n_after_adj = _rate(after_adj)
+
+        rows.append({
+            "workflow": workflow,
+            "completion_before": c_before,
+            "completion_after": c_after,
+            "delta_naive": c_after - c_before,
+            "completion_before_adj": c_before_adj,
+            "completion_after_adj": c_after_adj,
+            "delta_adj": c_after_adj - c_before_adj,
+            "sessions_after": n_after,
+            "sessions_after_adj": n_after_adj,
+            "rows_excluded": int(excluded.loc[group.index].sum()),
+        })
+
+    return pd.DataFrame(rows, columns=cols)
 
 
 if __name__ == "__main__":
@@ -414,11 +574,47 @@ if __name__ == "__main__":
     assert _buf_raw.equals(raw), "load_raw(buffer) must match load_raw(path) on identical bytes"
     assert validate_schema(raw) == [], f"bundled sample data should pass validate_schema, got {validate_schema(raw)}"
     assert validate_schema(raw.drop(columns=["sessions"])) != [], "validate_schema must catch a missing required column"
+
+    # Wilson bounds must bracket the point estimate and stay inside [0, 1].
+    for k, n in [(8, 10), (0, 5), (5, 5), (126, 140), (1, 1000)]:
+        lo, hi = wilson_interval(k, n)
+        assert 0.0 <= lo <= k / n <= hi <= 1.0, f"bad Wilson interval for {k}/{n}: {lo}, {hi}"
+    assert all(pd.isna(v) for v in wilson_interval(0, 0)), "0 trials must give (nan, nan)"
+    assert {"completion_lo", "completion_hi"} <= set(rollup.columns)
+
+    # A CSV that collapses to ONE (team, workflow, source) group used to raise
+    # "Buffer dtype mismatch" from groupby().apply() -- regression guard.
+    _one_group_csv = """date,team,workflow,source,sessions,completed,accepted_output,flagged_for_review,avg_minutes_saved,median_confidence,user_rating,notes
+2026-08-01,Sales,Lead summary,email,10,8,7,1,5,0.8,4,ok
+2026-08-02,Sales,Lead summary,email,12,9,7,1,5,0.8,4,ok
+"""
+    _one_group = load_raw(io.StringIO(_one_group_csv))
+    _one_clean = clean(_one_group)
+    _one_issues = detect_issues(_one_group, _one_clean)
+    assert weekly_rollup(_one_clean, _one_issues).shape[0] == 1
+
+    # The prompt-change date is read from notes, and the adjusted comparison
+    # must contradict the naive one on the sample week.
+    change_date = find_prompt_change_date(clean_df)
+    assert change_date == pd.Timestamp("2026-08-04"), change_date
+    assert find_prompt_change_date(_one_clean) is None, "no note -> no change date"
+    pc = prompt_change_comparison(clean_df, issues, change_date).set_index("workflow")
+    assert pc.shape[0] == 3, pc.shape
+    # Lead summary: +4.4pp naive, exactly flat once the flagged spike row goes.
+    assert abs(pc.loc["Lead summary", "delta_naive"] - 0.0435) < 0.002, pc.loc["Lead summary", "delta_naive"]
+    assert abs(pc.loc["Lead summary", "delta_adj"]) < 0.005, pc.loc["Lead summary", "delta_adj"]
+    # Reply draft: about half the apparent damage was the policy-change row.
+    assert abs(pc.loc["Reply draft", "delta_adj"] + 0.031) < 0.005, pc.loc["Reply draft", "delta_adj"]
+    # Feedback clustering carries no high-severity rows, so adjusting is a no-op.
+    assert pc.loc["Feedback clustering", "rows_excluded"] == 0
+    assert abs(pc.loc["Feedback clustering", "delta_naive"] - pc.loc["Feedback clustering", "delta_adj"]) < 1e-9
+    assert prompt_change_comparison(clean_df, issues, None).empty
+
     print(
         f"OK: {clean_df.shape[0]} clean rows, "
         f"team set is exactly {set(clean_df['team'].unique())}, "
         f"median_confidence NaN count={clean_df['median_confidence'].isna().sum()}, "
         f"user_rating NaN count={clean_df['user_rating'].isna().sum()}, "
         f"{len(issues)} issues detected, {rollup.shape[0]} rollup rows"
-        f"; buffer-load and validate_schema OK"
+        f"; Wilson intervals, single-group CSV, and prompt-change comparison OK"
     )

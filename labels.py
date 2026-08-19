@@ -25,6 +25,21 @@ COLUMN_LABELS: dict[str, str] = {
     "sessions_total": "Total sessions",
     "n_issues": "Issues flagged",
     "row_count": "Row count",
+    # Wilson interval bounds are numeric; the UI collapses them into the single
+    # display string `completion_ci` via ui_helpers.with_ci_display.
+    "completion_lo": "Completion rate low",
+    "completion_hi": "Completion rate high",
+    "completion_ci": "Completion rate 95% CI",
+    # Prompt-change comparison (data_processing.prompt_change_comparison).
+    "completion_before": "Before",
+    "completion_after": "After (all rows)",
+    "delta_naive": "Change (all rows)",
+    "completion_before_adj": "Before (excl. flagged)",
+    "completion_after_adj": "After (excl. flagged)",
+    "delta_adj": "Change (excl. flagged)",
+    "sessions_after": "Sessions after",
+    "sessions_after_adj": "Sessions after (excl. flagged)",
+    "rows_excluded": "Rows excluded",
 }
 
 CATEGORY_LABELS: dict[str, str] = {
