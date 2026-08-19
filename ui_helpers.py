@@ -57,7 +57,7 @@ _CUSTOM_CSS = """
 [data-testid="stCaptionContainer"] { color: var(--sd-slate-500); font-size: 0.875rem; }
 
 [data-testid="stMain"] { background-color: var(--sd-slate-50); }
-[data-testid="stMainBlockContainer"] { padding-top: var(--sd-space-6); padding-bottom: var(--sd-space-7); }
+[data-testid="stMainBlockContainer"] { padding-top: var(--sd-space-5); padding-bottom: var(--sd-space-5); }
 [data-testid="stHorizontalBlock"] { gap: var(--sd-space-4); }
 
 [data-testid="stMetric"] {
@@ -141,6 +141,61 @@ _CUSTOM_CSS = """
 [data-testid="stDataFrame"] { border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md); overflow: hidden; }
 [data-testid="stExpander"] { border: 1px solid var(--sd-slate-200); border-radius: var(--sd-radius-md); box-shadow: var(--sd-shadow-sm); overflow: hidden; }
 [data-testid="stAlertContainer"] { border-radius: var(--sd-radius-md); box-shadow: var(--sd-shadow-sm); }
+/* --- Home launcher: compact hero + guidance cards ---------------------- */
+.sd-hero--compact { padding: var(--sd-space-4) var(--sd-space-5); margin-bottom: var(--sd-space-4); }
+.sd-hero--compact .sd-hero-title { font-size: 1.75rem; }
+.sd-hero--compact .sd-hero-subtitle { font-size: 1rem; margin-bottom: var(--sd-space-1); }
+
+.sd-guide-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--sd-space-4); margin-bottom: var(--sd-space-5);
+}
+.sd-guide-card {
+  background: #FFFFFF; border: 1px solid var(--sd-slate-200);
+  border-radius: var(--sd-radius-md); padding: var(--sd-space-4) var(--sd-space-5);
+  box-shadow: var(--sd-shadow-sm);
+}
+.sd-guide-card p { font-size: 0.9rem; color: var(--sd-slate-600); line-height: 1.55; margin: 0; }
+.sd-guide-eyebrow {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--sd-indigo-600); margin-bottom: var(--sd-space-2);
+}
+.sd-guide-card--verdict { background: var(--sd-indigo-50); border-color: var(--sd-indigo-100); }
+.sd-verdict-list { margin: 0; padding-left: 1.1rem; }
+.sd-verdict-list li {
+  font-size: 0.9rem; color: var(--sd-slate-900); line-height: 1.5;
+  margin-bottom: var(--sd-space-2);
+}
+.sd-verdict-list li:last-child { margin-bottom: 0; }
+
+.sd-nav-label {
+  font-size: 0.6875rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--sd-slate-500); margin-bottom: var(--sd-space-2);
+}
+
+/* Navigation links rendered as cards, so the primary path is on the page and
+   not only in the sidebar. */
+[data-testid="stMain"] [data-testid="stPageLink"] a {
+  display: flex; align-items: center; gap: var(--sd-space-2);
+  background: #FFFFFF; border: 1px solid var(--sd-slate-200);
+  border-radius: var(--sd-radius-md); padding: var(--sd-space-3) var(--sd-space-4);
+  box-shadow: var(--sd-shadow-sm); color: var(--sd-slate-600);
+  font-size: 0.875rem; line-height: 1.4; height: 100%;
+}
+[data-testid="stMain"] [data-testid="stPageLink"] a:hover {
+  background: var(--sd-indigo-50); border-color: var(--sd-indigo-200); color: var(--sd-indigo-700);
+}
+
+/* --- Tab bar ----------------------------------------------------------- */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+  gap: var(--sd-space-4); border-bottom: 1px solid var(--sd-slate-200);
+  margin-bottom: var(--sd-space-4);
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+  font-size: 0.9375rem; font-weight: 600; color: var(--sd-slate-500); padding: 0 0 var(--sd-space-2);
+}
+[data-testid="stTabs"] [data-baseweb="tab"][aria-selected="true"] { color: var(--sd-indigo-700); }
+[data-testid="stTabs"] [data-baseweb="tab-highlight"] { background-color: var(--sd-indigo-600); }
 </style>
 """
 

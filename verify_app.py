@@ -93,25 +93,46 @@ print("OK: pure-function checks passed (concern_tag, _rate_comparison_data, "
 at = AppTest.from_file("app.py")
 at.run(timeout=30)
 assert not at.exception, [str(e) for e in at.exception]
-assert len(at.metric) == 4, len(at.metric)
-assert len(at.dataframe) >= 1
+# Home is a launcher: it must stay free of tables and charts, or it will scroll.
+assert len(at.dataframe) == 0, "Home must render no tables"
+assert len(at.metric) == 0, "Home must render no KPI cards"
 _md = _non_css_markdown(at)
-assert any("sd-hero" in m.value for m in _md), "hero header not found"
+assert any("sd-hero--compact" in m.value for m in _md), "compact hero not found"
+assert any("sd-guide-card" in m.value for m in _md), "guidance cards not found"
+# The verdict lines are computed from the pipeline, not written down.
+_verdict = chr(10).join(m.value for m in _md)
+assert "not</strong> a win" in _verdict, "prompt-change verdict line missing"
+assert "Feedback clustering" in _verdict, "worst-workflow verdict line missing"
+assert "Confidence is not quality" in _verdict, "confidence verdict line missing"
+print("OK: app.py (launcher: no tables/charts, computed verdict, nav links)")
+
+# ---------------------------------------------------------------------------
+# pages/1_Weekly_Findings.py -- the analysis, three tabs
+# ---------------------------------------------------------------------------
+at = AppTest.from_file("pages/1_Weekly_Findings.py")
+at.run(timeout=30)
+assert not at.exception, [str(e) for e in at.exception]
+assert len(at.metric) == 4, len(at.metric)
+_md = _non_css_markdown(at)
 assert any("sd-tag-strip" in m.value for m in _md), "concern-tag strip not found"
 assert any("not robust" in m.value for m in _md), "prompt-change verdict not rendered"
-_headers = [h.value for h in at.subheader]
-assert _headers == ["1. What's working", "2. What looks suspicious", "3. What to look at next"], _headers
-# The CI-backed ranking caption must be the computed non-overlap branch.
-assert any("does not overlap" in c.value for c in at.caption), "CI ranking caption not rendered"
-print("OK: app.py (three-question spine, CI ranking claim, prompt-change verdict)")
+# The CI-backed ranking claim must take the computed non-overlap branch.
+assert any("does not overlap" in s_.value for s_ in at.success), "CI ranking claim not rendered"
+# All five next-actions render, collapsed, most urgent first.
+_labels = [e.label for e in at.expander]
+assert sum(1 for lbl in _labels if lbl.startswith("**High**")) == 2, _labels
+assert any("Full weekly rollup table" in lbl for lbl in _labels), _labels
+assert len([lbl for lbl in _labels if lbl.startswith("**")]) == 5, _labels
+print("OK: pages/1_Weekly_Findings.py (3 tabs, CI claim, verdict, 5 collapsed actions)")
 
 # ---------------------------------------------------------------------------
 # pages/1_Workflow_Explorer.py -- drive the selectbox through all 3 options
 # ---------------------------------------------------------------------------
-at = AppTest.from_file("pages/1_Workflow_Explorer.py")
+at = AppTest.from_file("pages/2_Workflow_Explorer.py")
 at.run(timeout=30)
 assert not at.exception, [str(e) for e in at.exception]
 assert len(at.selectbox) == 1
+assert len(at.tabs) == 4, f"expected 4 detail tabs, got {len(at.tabs)}"
 
 for option in ["Lead summary", "Reply draft", "Feedback clustering"]:
     at.selectbox[0].select(option).run(timeout=30)
@@ -123,15 +144,16 @@ for option in ["Lead summary", "Reply draft", "Feedback clustering"]:
         assert any("56.7%" in m.value for m in _md if "sd-callout--annotation" in m.value)
     else:
         assert not has_annotation, f"change-point annotation should not appear for {option}"
-print("OK: pages/1_Workflow_Explorer.py (all 3 workflows, change-point annotation correctly gated)")
+print("OK: pages/2_Workflow_Explorer.py (all 3 workflows, change-point annotation correctly gated)")
 
 # ---------------------------------------------------------------------------
 # pages/2_Data_Trust_Center.py -- drive both multiselects
 # ---------------------------------------------------------------------------
-at = AppTest.from_file("pages/2_Data_Trust_Center.py")
+at = AppTest.from_file("pages/3_Data_Trust_Center.py")
 at.run(timeout=30)
 assert not at.exception, [str(e) for e in at.exception]
 assert len(at.multiselect) == 2
+assert len(at.tabs) == 3, f"expected 3 tabs, got {len(at.tabs)}"
 assert any("sd-tag-strip" in m.value for m in _non_css_markdown(at))
 
 at.multiselect[0].unselect(at.multiselect[0].value[0]).run(timeout=30)
@@ -139,18 +161,18 @@ assert not at.exception
 
 at.multiselect[1].set_value([]).run(timeout=30)
 assert not at.exception
-print("OK: pages/2_Data_Trust_Center.py (multiselect combinations, including empty)")
+print("OK: pages/3_Data_Trust_Center.py (multiselect combinations, including empty)")
 
 # ---------------------------------------------------------------------------
 # pages/3_Upload_Your_Own_Week.py -- no file, valid sample, malicious CSV
 # ---------------------------------------------------------------------------
-at = AppTest.from_file("pages/3_Upload_Your_Own_Week.py")
+at = AppTest.from_file("pages/4_Upload_Your_Own_Week.py")
 at.run(timeout=30)
 assert not at.exception
 assert len(at.info) >= 1
-print("OK: pages/3_Upload_Your_Own_Week.py (no file uploaded)")
+print("OK: pages/4_Upload_Your_Own_Week.py (no file uploaded)")
 
-at = AppTest.from_file("pages/3_Upload_Your_Own_Week.py")
+at = AppTest.from_file("pages/4_Upload_Your_Own_Week.py")
 at.run(timeout=30)
 with open(SAMPLE_CSV, "rb") as f:
     content = f.read()
@@ -158,7 +180,7 @@ at.file_uploader[0].set_value(("product_usage_events.csv", content, "text/csv"))
 assert not at.exception, [str(e) for e in at.exception]
 assert len(at.metric) == 4
 assert any("sd-tag-strip" in m.value for m in _non_css_markdown(at))
-print("OK: pages/3_Upload_Your_Own_Week.py (real sample CSV)")
+print("OK: pages/4_Upload_Your_Own_Week.py (real sample CSV)")
 
 # Malicious/messy notes text must render HTML-escaped, not raw. The notes text
 # must contain the literal substring "small sample" (case-insensitive) to
@@ -174,14 +196,14 @@ _malicious_csv = """date,team,workflow,source,sessions,completed,accepted_output
 2026-08-02,Sales,Lead summary,email,10,8,7,1,5,0.8,4,ok
 """
 
-at = AppTest.from_file("pages/3_Upload_Your_Own_Week.py")
+at = AppTest.from_file("pages/4_Upload_Your_Own_Week.py")
 at.run(timeout=30)
 at.file_uploader[0].set_value(("malicious.csv", _malicious_csv.encode(), "text/csv")).run(timeout=30)
 assert not at.exception, [str(e) for e in at.exception]
 _rendered = "\n".join(m.value for m in at.markdown)
 assert "&lt;script&gt;" in _rendered, "expected HTML-escaped script tag not found"
 assert "<script>" not in _rendered, "raw unescaped script tag leaked into rendered output"
-print("OK: pages/3_Upload_Your_Own_Week.py (malicious CSV renders HTML-escaped, no injection)")
+print("OK: pages/4_Upload_Your_Own_Week.py (malicious CSV renders HTML-escaped, no injection)")
 
 print()
 print("ALL CHECKS PASSED")
